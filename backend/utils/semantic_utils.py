@@ -1,19 +1,34 @@
 """
 Semantic utilities for resume and job description matching
 Phase 2: Sentence-BERT embeddings and similarity computation
+Phase 4: Optimization with caching and enhanced error handling
 """
 
 import re
 import numpy as np
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from sentence_transformers import SentenceTransformer, util
 import logging
+import hashlib
+from functools import lru_cache
+import time
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 # Load pre-trained model (lazy loading for efficiency)
 _model = None
+
+# Cache for embeddings (stores text hash -> embedding)
+_embedding_cache: Dict[str, np.ndarray] = {}
+
+# Performance metrics
+_metrics = {
+    "total_requests": 0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+    "total_processing_time": 0.0
+}
 
 
 def get_model():
@@ -30,24 +45,56 @@ def get_model():
     return _model
 
 
-def get_embeddings(texts: List[str]) -> np.ndarray:
+def _hash_text(text: str) -> str:
+    """Generate hash for text to use as cache key"""
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+
+def get_embeddings(texts: List[str], use_cache: bool = True) -> np.ndarray:
     """
     Generate embeddings for a list of texts using Sentence-BERT
+    Phase 4: Added caching for repeated job descriptions
     
     Args:
         texts: List of text strings to encode
+        use_cache: Whether to use embedding cache (default: True)
         
     Returns:
         numpy array of embeddings (shape: [len(texts), embedding_dim])
     """
     try:
+        start_time = time.time()
         model = get_model()
-        embeddings = model.encode(texts, convert_to_tensor=False, show_progress_bar=False)
-        logger.info(f"Generated embeddings for {len(texts)} texts")
+        embeddings_list = []
+        
+        for text in texts:
+            text_hash = _hash_text(text)
+            
+            # Check cache
+            if use_cache and text_hash in _embedding_cache:
+                embeddings_list.append(_embedding_cache[text_hash])
+                _metrics["cache_hits"] += 1
+                logger.debug(f"Cache hit for text (hash: {text_hash[:8]}...)")
+            else:
+                # Generate new embedding
+                embedding = model.encode([text], convert_to_tensor=False, show_progress_bar=False)[0]
+                embeddings_list.append(embedding)
+                _metrics["cache_misses"] += 1
+                
+                # Store in cache
+                if use_cache:
+                    _embedding_cache[text_hash] = embedding
+                    logger.debug(f"Cached embedding (hash: {text_hash[:8]}...)")
+        
+        embeddings = np.array(embeddings_list)
+        elapsed_time = time.time() - start_time
+        
+        logger.info(f"Generated embeddings for {len(texts)} texts in {elapsed_time:.2f}s (cache hits: {_metrics['cache_hits']}, misses: {_metrics['cache_misses']})")
         return embeddings
+        
     except Exception as e:
         logger.error(f"Error generating embeddings: {str(e)}")
-        raise
+        raise ValueError(f"Failed to generate embeddings: {str(e)}")
 
 
 def compute_similarity(resume_embedding: np.ndarray, jd_embedding: np.ndarray) -> float:
@@ -265,30 +312,94 @@ def extract_text_from_file(file_path: str) -> str:
         raise
 
 
+def validate_input_text(text: str, field_name: str, min_length: int = 50, max_length: int = 50000) -> None:
+    """
+    Validate input text with comprehensive checks
+    Phase 4: Enhanced validation with detailed error messages
+    
+    Args:
+        text: Input text to validate
+        field_name: Name of the field (for error messages)
+        min_length: Minimum required length
+        max_length: Maximum allowed length
+        
+    Raises:
+        ValueError: If validation fails
+    """
+    if not text or not isinstance(text, str):
+        raise ValueError(f"{field_name} must be a non-empty string")
+    
+    text = text.strip()
+    
+    if not text:
+        raise ValueError(f"{field_name} cannot be empty or contain only whitespace")
+    
+    if len(text) < min_length:
+        raise ValueError(f"{field_name} must be at least {min_length} characters (currently {len(text)})")
+    
+    if len(text) > max_length:
+        raise ValueError(f"{field_name} is too long. Maximum {max_length} characters (currently {len(text)})")
+    
+    # Check for meaningful content (not just special characters)
+    alphanumeric_count = sum(c.isalnum() for c in text)
+    if alphanumeric_count < min_length * 0.5:
+        raise ValueError(f"{field_name} does not contain enough meaningful content")
+
+
+def get_metrics() -> Dict:
+    """
+    Get performance metrics for monitoring
+    Phase 4: Added for analytics and debugging
+    
+    Returns:
+        Dictionary with performance metrics
+    """
+    return {
+        **_metrics,
+        "cache_size": len(_embedding_cache),
+        "cache_hit_rate": (_metrics["cache_hits"] / max(1, _metrics["cache_hits"] + _metrics["cache_misses"])) * 100
+    }
+
+
+def clear_cache() -> None:
+    """
+    Clear the embedding cache
+    Phase 4: Useful for testing and memory management
+    """
+    global _embedding_cache
+    _embedding_cache.clear()
+    logger.info("Embedding cache cleared")
+
+
 def analyze_resume_jd_match(resume_text: str, jd_text: str) -> Dict:
     """
     Complete analysis of resume and job description match
     Main function that orchestrates all semantic matching
+    Phase 4: Enhanced error handling and performance tracking
     
     Args:
         resume_text: Resume text content
         jd_text: Job description text content
         
     Returns:
-        Dictionary with match_score, strengths, gaps
+        Dictionary with match_score, strengths, gaps, processing_time
+        
+    Raises:
+        ValueError: If input validation fails
+        RuntimeError: If semantic analysis fails
     """
+    start_time = time.time()
+    
     try:
         logger.info("Starting semantic analysis")
+        _metrics["total_requests"] += 1
         
-        # Validate inputs
-        if not resume_text or not jd_text:
-            raise ValueError("Resume and job description text cannot be empty")
+        # Validate inputs with detailed error messages
+        validate_input_text(resume_text, "Resume text", min_length=50, max_length=50000)
+        validate_input_text(jd_text, "Job description text", min_length=50, max_length=50000)
         
-        if len(resume_text) < 50 or len(jd_text) < 50:
-            raise ValueError("Resume and job description must be at least 50 characters")
-        
-        # Get embeddings for full texts
-        embeddings = get_embeddings([resume_text, jd_text])
+        # Get embeddings for full texts (with caching)
+        embeddings = get_embeddings([resume_text, jd_text], use_cache=True)
         resume_embedding = embeddings[0]
         jd_embedding = embeddings[1]
         
@@ -298,15 +409,29 @@ def analyze_resume_jd_match(resume_text: str, jd_text: str) -> Dict:
         # Identify strengths and gaps
         strengths, gaps = identify_strengths_gaps(resume_text, jd_text)
         
+        processing_time = time.time() - start_time
+        _metrics["total_processing_time"] += processing_time
+        
         result = {
             "match_score": match_score,
             "strengths": strengths,
-            "gaps": gaps
+            "gaps": gaps,
+            "processing_time": round(processing_time, 2),
+            "metadata": {
+                "resume_length": len(resume_text),
+                "jd_length": len(jd_text),
+                "cache_used": True
+            }
         }
         
-        logger.info(f"Analysis complete - Score: {match_score}%, Strengths: {len(strengths)}, Gaps: {len(gaps)}")
+        logger.info(f"Analysis complete - Score: {match_score}%, Strengths: {len(strengths)}, Gaps: {len(gaps)}, Time: {processing_time:.2f}s")
         return result
         
-    except Exception as e:
-        logger.error(f"Error in analyze_resume_jd_match: {str(e)}")
+    except ValueError as e:
+        # Validation errors - user-friendly messages
+        logger.warning(f"Validation error: {str(e)}")
         raise
+    except Exception as e:
+        # Unexpected errors - log and re-raise
+        logger.error(f"Unexpected error in analyze_resume_jd_match: {str(e)}", exc_info=True)
+        raise RuntimeError(f"Analysis failed: {str(e)}")

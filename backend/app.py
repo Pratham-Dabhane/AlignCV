@@ -8,12 +8,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
+import os
+from pathlib import Path
 
 # Import semantic utilities (Phase 2)
 from utils.semantic_utils import analyze_resume_jd_match
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Create logs directory if it doesn't exist (Phase 4)
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+
+# Configure logging (Phase 4: Enhanced logging)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(log_dir / 'aligncv.log', mode='a')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -112,11 +125,20 @@ async def analyze_resume(request: AnalyzeRequest):
     except HTTPException:
         raise
     except ValueError as e:
-        logger.error(f"Validation error: {str(e)}")
+        # Validation errors - return user-friendly messages
+        logger.warning(f"Validation error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        # Runtime errors from semantic analysis
+        logger.error(f"Runtime error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Error during analysis: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        # Unexpected errors - log with full traceback
+        logger.error(f"Unexpected error during analysis: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred. Please try again or contact support if the issue persists."
+        )
 
 
 @app.get("/health")
@@ -124,12 +146,39 @@ async def health_check():
     """Detailed health check"""
     return {
         "status": "healthy",
-        "api_version": "0.1.0",
+        "api_version": "0.4.0",
         "endpoints": {
             "analyze": "/analyze",
-            "health": "/health"
+            "health": "/health",
+            "metrics": "/metrics"
         }
     }
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """
+    Get performance metrics
+    Phase 4: Added for monitoring and debugging
+    
+    Returns:
+        Performance metrics including cache statistics
+    """
+    try:
+        from utils.semantic_utils import get_metrics
+        metrics = get_metrics()
+        
+        return {
+            "status": "success",
+            "metrics": metrics,
+            "timestamp": logger.handlers[0].formatter.formatTime(logging.LogRecord(
+                name="", level=0, pathname="", lineno=0,
+                msg="", args=(), exc_info=None
+            ))
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
 if __name__ == "__main__":
