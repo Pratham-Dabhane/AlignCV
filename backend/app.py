@@ -96,7 +96,7 @@ async def analyze_resume(request: AnalyzeRequest):
         logger.info("Starting semantic analysis...")
         result = analyze_resume_jd_match(
             resume_text=request.resume_text,
-            job_description_text=request.job_description_text
+            jd_text=request.job_description_text
         )
         
         response = AnalyzeResponse(

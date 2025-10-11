@@ -77,7 +77,7 @@ def call_api(resume_text: str, job_description_text: str) -> Optional[dict]:
                 "resume_text": resume_text,
                 "job_description_text": job_description_text
             },
-            timeout=30
+            timeout=120  # 2 minutes for first-time model download
         )
         response.raise_for_status()
         return response.json()
@@ -161,7 +161,7 @@ def main():
         elif len(resume_text) < 50 or len(job_description_text) < 50:
             st.warning("⚠️ Please provide more detailed resume and job description (at least 50 characters each).")
         else:
-            with st.spinner("🔄 Analyzing your resume..."):
+            with st.spinner("🔄 Analyzing your resume... (First run may take 1-2 minutes to download model)"):
                 result = call_api(resume_text, job_description_text)
             
             if result:
