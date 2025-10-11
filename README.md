@@ -46,7 +46,7 @@ Frontend will run at: `http://localhost:8501`
 
 ## 📋 Development Phases
 - [x] Phase 1: Foundations & Core Architecture
-- [ ] Phase 2: TBD
+- [x] Phase 2: Semantic Matching & Scoring
 - [ ] Phase 3: TBD
 - [ ] Phase 4: TBD
 - [ ] Phase 5: TBD
@@ -54,5 +54,6 @@ Frontend will run at: `http://localhost:8501`
 ## 🔧 Tech Stack
 - Backend: Python + FastAPI
 - Frontend: Streamlit (MVP) / React (future)
-- Semantic Matching: Sentence-BERT (Phase 2+)
-- Cost: Free tier / <$1
+- **Semantic Matching: Sentence-BERT (all-MiniLM-L6-v2) ✅**
+- Vector Similarity: Cosine similarity with PyTorch
+- Cost: 100% Free (local computation, no API calls)

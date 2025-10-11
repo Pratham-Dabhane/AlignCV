@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 
+# Import semantic utilities (Phase 2)
+from utils.semantic_utils import analyze_resume_jd_match
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,8 +65,10 @@ async def analyze_resume(request: AnalyzeRequest):
     """
     Analyze resume against job description
     
-    Phase 1: Returns dummy data
-    Phase 2+: Will integrate semantic matching, gap analysis, and checklist generation
+    Phase 2: Semantic matching with Sentence-BERT embeddings
+    - Computes similarity score (0-100%)
+    - Identifies strengths (matching requirements)
+    - Identifies gaps (missing requirements)
     
     Args:
         request: AnalyzeRequest with resume_text and job_description_text
@@ -74,21 +79,41 @@ async def analyze_resume(request: AnalyzeRequest):
     try:
         logger.info(f"Received analysis request - Resume length: {len(request.resume_text)}, JD length: {len(request.job_description_text)}")
         
-        # Phase 1: Return dummy data
-        # TODO Phase 2: Implement semantic matching with embeddings
-        # TODO Phase 3: Implement gap analysis
-        # TODO Phase 4: Generate actionable checklist
+        # Validate input lengths
+        if len(request.resume_text) < 50:
+            raise HTTPException(
+                status_code=400, 
+                detail="Resume text is too short. Please provide at least 50 characters."
+            )
         
-        response = AnalyzeResponse(
-            match_score=0.0,
-            strengths=[],
-            gaps=[],
-            message="Phase 1: Dummy response. Semantic matching coming in Phase 2."
+        if len(request.job_description_text) < 50:
+            raise HTTPException(
+                status_code=400, 
+                detail="Job description text is too short. Please provide at least 50 characters."
+            )
+        
+        # Phase 2: Semantic matching with embeddings
+        logger.info("Starting semantic analysis...")
+        result = analyze_resume_jd_match(
+            resume_text=request.resume_text,
+            job_description_text=request.job_description_text
         )
         
-        logger.info(f"Analysis complete - Match score: {response.match_score}")
+        response = AnalyzeResponse(
+            match_score=result["match_score"],
+            strengths=result["strengths"],
+            gaps=result["gaps"],
+            message="Phase 2: Semantic matching complete. Score based on Sentence-BERT embeddings."
+        )
+        
+        logger.info(f"Analysis complete - Match score: {response.match_score}%")
         return response
         
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")

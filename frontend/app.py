@@ -170,13 +170,29 @@ def main():
                 # Display results
                 st.markdown("### 📊 Results")
                 
-                # Match Score
+                # Match Score with color coding
                 match_score = result.get("match_score", 0)
+                
+                # Determine color based on score
+                if match_score >= 75:
+                    score_color = "#10B981"  # Green
+                    score_label = "Excellent Match! 🎉"
+                elif match_score >= 60:
+                    score_color = "#14B8A6"  # Teal
+                    score_label = "Good Match! 👍"
+                elif match_score >= 45:
+                    score_color = "#F59E0B"  # Orange
+                    score_label = "Fair Match"
+                else:
+                    score_color = "#EF4444"  # Red
+                    score_label = "Needs Improvement"
+                
                 st.markdown(f"""
-                    <div style="background-color: {BRAND_COLORS['primary']}; color: white; padding: 2rem; border-radius: 1rem; text-align: center;">
+                    <div style="background: linear-gradient(135deg, {score_color} 0%, {BRAND_COLORS['primary']} 100%); color: white; padding: 2rem; border-radius: 1rem; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         <h2 style="margin: 0; color: white;">Match Score</h2>
-                        <h1 style="margin: 0.5rem 0; font-size: 3rem; color: white;">{match_score}%</h1>
-                        <p style="margin: 0; opacity: 0.9;">Phase 1: Dummy data - Real matching coming in Phase 2</p>
+                        <h1 style="margin: 0.5rem 0; font-size: 3.5rem; color: white; font-weight: bold;">{match_score}%</h1>
+                        <p style="margin: 0; opacity: 0.95; font-size: 1.2rem;">{score_label}</p>
+                        <p style="margin: 0.5rem 0 0 0; opacity: 0.8; font-size: 0.9rem;">Based on semantic similarity analysis</p>
                     </div>
                 """, unsafe_allow_html=True)
                 
@@ -186,22 +202,32 @@ def main():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.markdown("### ✅ Strengths")
+                    st.markdown("### ✅ Your Strengths")
+                    st.markdown('<p style="color: #6B7280; margin-bottom: 1rem;">Requirements you already meet:</p>', unsafe_allow_html=True)
                     strengths = result.get("strengths", [])
                     if strengths:
-                        for strength in strengths:
-                            st.markdown(f"- {strength}")
+                        for i, strength in enumerate(strengths, 1):
+                            st.markdown(f"""
+                                <div style="background-color: #D1FAE5; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.5rem; border-left: 3px solid #10B981;">
+                                    <span style="color: #065F46;">{strength}</span>
+                                </div>
+                            """, unsafe_allow_html=True)
                     else:
-                        st.info("Phase 1: Strengths analysis coming in Phase 3")
+                        st.info("No specific strengths identified. Try providing more detailed information.")
                 
                 with col2:
-                    st.markdown("### ⚠️ Gaps to Address")
+                    st.markdown("### ⚠️ Areas to Improve")
+                    st.markdown('<p style="color: #6B7280; margin-bottom: 1rem;">Missing or weak matches:</p>', unsafe_allow_html=True)
                     gaps = result.get("gaps", [])
                     if gaps:
-                        for gap in gaps:
-                            st.markdown(f"- {gap}")
+                        for i, gap in enumerate(gaps, 1):
+                            st.markdown(f"""
+                                <div style="background-color: #FEF3C7; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.5rem; border-left: 3px solid #F59E0B;">
+                                    <span style="color: #92400E;">{gap}</span>
+                                </div>
+                            """, unsafe_allow_html=True)
                     else:
-                        st.info("Phase 1: Gap analysis coming in Phase 3")
+                        st.info("No significant gaps found. Your resume looks well-aligned!")
                 
                 # Message
                 if result.get("message"):
@@ -211,8 +237,9 @@ def main():
     st.markdown("---")
     st.markdown("""
         <div style="text-align: center; opacity: 0.6; padding: 1rem;">
-            <p>AlignCV v0.1.0 - Phase 1: Foundations & Core Architecture</p>
-            <p>Built with FastAPI + Streamlit • Free & Open Source</p>
+            <p>AlignCV v0.2.0 - Phase 2: Semantic Matching & Scoring ✅</p>
+            <p>Built with FastAPI + Streamlit + Sentence-BERT • 100% Free & Open Source</p>
+            <p style="font-size: 0.85rem; margin-top: 0.5rem;">Using all-MiniLM-L6-v2 model for semantic analysis</p>
         </div>
     """, unsafe_allow_html=True)
 
