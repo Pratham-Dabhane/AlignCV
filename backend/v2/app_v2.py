@@ -15,10 +15,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from backend.v2.config import settings
-from backend.v2.database import init_db
-from backend.v2.auth.routes import router as auth_router
-from backend.v2.documents.routes import router as documents_router
+from .config import settings
+from .database import init_db
+from .auth.routes import router as auth_router
+from .documents.routes import router as documents_router
 
 # Configure logging
 logging.basicConfig(
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Debug mode: {settings.debug}")
     logger.info(f"Storage backend: {settings.storage_backend}")
-    logger.info("AlignCV V2 ready! 🚀")
+    logger.info("AlignCV V2 ready!")
     
     yield
     

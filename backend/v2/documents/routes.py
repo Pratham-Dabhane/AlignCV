@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 
-from backend.v2.database import get_db
-from backend.v2.models.models import User, Document
-from backend.v2.auth.utils import decode_token
-from backend.v2.documents.parser import parse_document, compute_text_hash, validate_text_content
-from backend.v2.nlp.extractor import extract_all
-from backend.v2.storage.handler import get_storage
-from backend.v2.config import settings
+from ..database import get_db
+from ..models.models import User, Document
+from ..auth.utils import decode_token
+from .parser import parse_document, compute_text_hash, validate_text_content
+from ..nlp.extractor import extract_all
+from ..storage.handler import get_storage
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

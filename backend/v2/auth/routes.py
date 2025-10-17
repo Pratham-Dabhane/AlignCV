@@ -15,17 +15,17 @@ from sqlalchemy import select
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-from backend.v2.database import get_db
-from backend.v2.models.models import User
-from backend.v2.auth.schemas import (
+from ..database import Base, get_db
+from ..models.models import User
+from .schemas import (
     SignupRequest, LoginRequest, GoogleAuthRequest,
     RefreshTokenRequest, AuthResponse, TokenResponse, UserResponse, ErrorResponse
 )
-from backend.v2.auth.utils import (
+from .utils import (
     hash_password, verify_password, create_access_token,
     create_refresh_token, verify_token
 )
-from backend.v2.config import settings
+from ..config import settings
 
 # Setup logging
 logger = logging.getLogger(__name__)

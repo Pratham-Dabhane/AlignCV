@@ -9,7 +9,7 @@ import spacy
 from typing import List, Dict, Set
 from functools import lru_cache
 
-from backend.v2.config import settings
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-from backend.v2.config import settings
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

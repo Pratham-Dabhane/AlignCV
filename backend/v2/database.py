@@ -6,7 +6,7 @@ Uses SQLAlchemy async engine for PostgreSQL.
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from backend.v2.config import settings
+from .config import settings
 
 # Create async engine
 # Convert postgresql:// to postgresql+asyncpg:// for async support
