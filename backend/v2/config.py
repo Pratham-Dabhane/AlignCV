@@ -70,9 +70,13 @@ class Settings(BaseSettings):
     sendgrid_from_name: str = "AlignCV"
     
     # ========================================
-    # Redis
+    # Redis & Celery (Phase 7)
     # ========================================
     redis_url: Optional[str] = None
+    upstash_redis_rest_url: Optional[str] = None
+    upstash_redis_rest_token: Optional[str] = None
+    celery_broker_url: Optional[str] = None
+    celery_result_backend: Optional[str] = None
     
     # ========================================
     # File Storage

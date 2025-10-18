@@ -37,6 +37,8 @@ class User(Base):
     document_versions = relationship("DocumentVersion", back_populates="user", cascade="all, delete-orphan")
     bookmarks = relationship("JobBookmark", back_populates="user", cascade="all, delete-orphan")
     applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
+    notification_settings = relationship("NotificationSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', name='{self.name}')>"
@@ -138,6 +140,7 @@ class Job(Base):
     # Relationships
     bookmarks = relationship("JobBookmark", back_populates="job", cascade="all, delete-orphan")
     applications = relationship("JobApplication", back_populates="job", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="job", cascade="all, delete-orphan")
     
     # Indexes for common queries
     __table_args__ = (
@@ -205,3 +208,79 @@ class JobApplication(Base):
     
     def __repr__(self):
         return f"<JobApplication(id={self.id}, user_id={self.user_id}, job_id={self.job_id}, status='{self.status}')>"
+
+
+class NotificationSettings(Base):
+    """
+    User notification preferences (Phase 7).
+    
+    Controls email digest frequency and notification types.
+    """
+    __tablename__ = "notification_settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    
+    # Email notification settings
+    email_enabled = Column(Integer, nullable=False, default=1)  # SQLite doesn't have boolean, use 1/0
+    digest_frequency = Column(String(20), nullable=False, default="daily")  # daily, weekly, disabled
+    
+    # Notification types
+    notify_new_matches = Column(Integer, nullable=False, default=1)  # Notify on new job matches
+    notify_application_updates = Column(Integer, nullable=False, default=1)  # Notify on application status changes
+    
+    # Matching thresholds
+    min_match_score = Column(Float, nullable=False, default=0.85)  # Only notify if match > 85%
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    user = relationship("User", back_populates="notification_settings")
+    
+    def __repr__(self):
+        return f"<NotificationSettings(user_id={self.user_id}, digest={self.digest_frequency}, enabled={bool(self.email_enabled)})>"
+
+
+class Notification(Base):
+    """
+    Notification history (Phase 7).
+    
+    Stores all notifications sent to users.
+    """
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Notification details
+    type = Column(String(50), nullable=False)  # job_match, application_update, digest
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    
+    # Job reference (if applicable)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True)
+    match_score = Column(Float, nullable=True)  # For job_match type
+    
+    # Email delivery status
+    email_sent = Column(Integer, nullable=False, default=0)  # 0 = pending, 1 = sent
+    email_sent_at = Column(DateTime, nullable=True)
+    email_error = Column(Text, nullable=True)  # Store error if email failed
+    
+    # Read status
+    is_read = Column(Integer, nullable=False, default=0)  # 0 = unread, 1 = read
+    read_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="notifications")
+    job = relationship("Job", back_populates="notifications")
+    
+    __table_args__ = (
+        Index('idx_user_unread', 'user_id', 'is_read'),
+        Index('idx_user_created', 'user_id', 'created_at'),
+    )
+    
+    def __repr__(self):
+        return f"<Notification(id={self.id}, user_id={self.user_id}, type='{self.type}', read={bool(self.is_read)})>"

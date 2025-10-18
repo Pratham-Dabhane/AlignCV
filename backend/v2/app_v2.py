@@ -22,6 +22,7 @@ from .auth.routes import router as auth_router
 from .documents.routes import router as documents_router
 from .ai.routes import router as ai_router
 from .jobs.routes import router as jobs_router
+from .notifications.routes import router as notifications_router
 
 # Security scheme for OpenAPI docs
 security = HTTPBearer()
@@ -97,6 +98,7 @@ app_v2.include_router(auth_router)
 app_v2.include_router(documents_router)
 app_v2.include_router(ai_router)
 app_v2.include_router(jobs_router)
+app_v2.include_router(notifications_router)
 
 @app_v2.get("/v2/")
 async def root():
