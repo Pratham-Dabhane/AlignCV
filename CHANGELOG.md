@@ -5,6 +5,124 @@ All notable changes to AlignCV will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [2.0.0] - 2025-10-19
+
+### 🎉 V2.0 Release - Complete Career Management Platform with AI Resume Tailoring!
+
+Major version release with complete V2 architecture, Phase 9 AI Resume Tailoring (THE KILLER FEATURE), and critical bug fixes.
+
+### 🎯 Added - Phase 9: AI Resume Tailoring
+
+**The feature that sets AlignCV apart from all competitors!**
+
+#### Backend (`backend/v2/ai/`)
+- ✨ **AI Tailoring Engine** (`rewrite_engine.py`):
+  - `tailor_resume_to_job()` function with Mistral AI integration
+  - Three tailoring levels: Conservative, Moderate, Aggressive
+  - Sophisticated prompt engineering for each level
+  - Fallback mode when API unavailable
+  - Timeout handling (45 seconds)
+  - JSON parsing and validation
+  
+- 🚀 **New API Endpoint** (`routes.py`):
+  - `POST /v2/rewrite/tailor-to-job` - Tailor resume to specific job
+  - `TailorResumeRequest` Pydantic schema with validation
+  - `TailorResumeResponse` schema with 11 comprehensive fields
+  - JWT authentication and document ownership verification
+  - Full error handling with HTTPException
+
+#### Frontend (`frontend/pages/documents.py`)
+- 🎨 **New UI Tab**: "🎯 Tailor to Job" (4th tab in Documents page)
+- **Input Components**:
+  - Resume selector dropdown
+  - Large job description textarea (250px height)
+  - Tailoring level slider with emoji indicators
+  - Original resume preview (optional)
+  - Real-time validation (50 char minimum for JD)
+  
+- **Results Dashboard**:
+  - Match score metric with color coding (🟢 80%+, 🟡 60-79%, 🔴 <60%)
+  - Changes count display
+  - Processing time metric
+  - Missing skills analysis with red badges (❌)
+  - Priority improvements list (top 3-5 critical changes)
+  - Keyword suggestions (expandable section)
+  - Detailed changes log (expandable section)
+  - Before/after side-by-side comparison (400px text areas)
+  - Download tailored resume button (TXT)
+  - Download analysis report button (TXT)
+  - Pro tips and success guidance (expandable)
+
+#### Documentation
+- 📚 **PHASE9_COMPLETE.md** (400+ lines):
+  - Complete feature documentation
+  - Technical implementation details
+  - Use cases and benefits
+  - Testing checklist
+  - Pro tips for users
+  - Known limitations
+  - Future enhancements roadmap
+
+- 📊 **PHASE9_SUMMARY.md** (1000+ lines):
+  - Comprehensive overview with examples
+  - Success metrics and projections
+  - User story (Sarah's journey)
+  - Market positioning analysis
+  - Launch preparation guide
+
+### 🐛 Fixed - Critical Bug Fixes (October 19, 2025)
+
+#### 1. Documents API Response Structure Mismatch
+- **Issue**: Frontend expected array `[]`, backend returned object `{"documents": []}`
+- **Error**: `'str' object has no attribute 'get'`
+- **Fix**: Added proper JSON parsing with type checking
+- **Files**: `frontend/pages/documents.py` (3 sections)
+
+#### 2. Upload Response Key Mismatch
+- **Issue**: Frontend used wrong keys (`id`, `filename`, `extracted_text`)
+- **Actual**: Backend returns (`document_id`, `file_name`, `parsed_text`)
+- **Error**: Display showed "None" for all extracted data
+- **Fix**: Updated all keys to match API response
+- **Files**: `frontend/pages/documents.py`
+
+#### 3. AI Rewrite Endpoint Path Incorrect
+- **Issue**: Frontend calling `/v2/ai/rewrite-resume`
+- **Actual**: Endpoint is `/v2/rewrite/`
+- **Error**: 404 Not Found
+- **Fix**: Corrected API endpoint path
+- **Files**: `frontend/pages/documents.py`
+
+#### 4. Missing extracted_text in Documents List
+- **Issue**: Documents list only returned `text_preview` (200 chars)
+- **Impact**: AI features couldn't access full resume text
+- **Fix**: Added `extracted_text` field to list response
+- **Files**: `backend/v2/documents/routes.py`
+
+**Documentation**: See [BUGFIXES_SUMMARY.md](BUGFIXES_SUMMARY.md) for detailed analysis.
+
+### 🔄 Changed
+
+#### API Structure
+- Updated documents list endpoint to include full `extracted_text`
+- Improved error messages across all endpoints
+- Enhanced response schemas with more detailed data
+
+#### Frontend
+- Changed Documents page from 3 to 4 tabs
+- Improved error handling with better user messages
+- Added loading spinners with context
+- Enhanced success celebrations (balloons, confetti)
+
+#### Documentation
+- Updated README.md with V2 features and Phase 9
+- Updated QUICKSTART.md for V2 architecture
+- Added comprehensive troubleshooting guide
+- Updated all badges to version 2.0.0
+
+---
+
 ## [1.0.0] - 2025-10-12
 
 ### 🎉 V1.0 Release - Production Ready!

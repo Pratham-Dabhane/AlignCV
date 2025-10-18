@@ -205,7 +205,8 @@ async def list_documents(
                 "file_type": doc.file_type,
                 "file_size": doc.file_size,
                 "created_at": doc.created_at.isoformat(),
-                "text_preview": doc.extracted_text[:200] + "..." if len(doc.extracted_text) > 200 else doc.extracted_text
+                "text_preview": doc.extracted_text[:200] + "..." if len(doc.extracted_text) > 200 else doc.extracted_text,
+                "extracted_text": doc.extracted_text  # Include full text for AI features
             }
             for doc in documents
         ],

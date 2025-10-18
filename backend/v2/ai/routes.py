@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from ..database import get_db
 from ..models.models import Document, DocumentVersion, User
 from ..auth.utils import verify_token
-from .rewrite_engine import rewrite_resume, extract_keyphrases
+from .rewrite_engine import rewrite_resume, extract_keyphrases, tailor_resume_to_job
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -343,3 +343,142 @@ def _generate_diff_html(original: str, rewritten: str) -> str:
     html_lines.append('</div>')
     
     return '\n'.join(html_lines)
+
+
+# ============================================================================
+# PHASE 9: RESUME TAILORING TO JOB DESCRIPTION
+# ============================================================================
+
+class TailorResumeRequest(BaseModel):
+    """Request schema for resume tailoring to specific job."""
+    resume_id: int = Field(..., description="ID of the document to tailor")
+    job_description: str = Field(..., min_length=50, description="Target job description")
+    tailoring_level: str = Field(
+        default="moderate",
+        description="Tailoring aggressiveness: conservative, moderate, or aggressive"
+    )
+
+
+class TailorResumeResponse(BaseModel):
+    """Response schema for tailored resume."""
+    tailored_resume: str
+    original_resume: str
+    match_score: int = Field(..., ge=0, le=100)
+    missing_skills: list
+    keyword_suggestions: list
+    changes_made: list
+    priority_improvements: list
+    tailoring_level: str
+    latency: float
+    api_status: str
+    warning: Optional[str] = None
+
+
+@router.post("/tailor-to-job", response_model=TailorResumeResponse)
+async def tailor_resume_to_job_endpoint(
+    request: TailorResumeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **PHASE 9: Resume Tailoring**
+    
+    Tailor a resume to match a specific job description using AI analysis.
+    
+    This powerful feature:
+    - Analyzes gaps between your resume and job requirements
+    - Identifies missing skills and keywords
+    - Generates a tailored version optimized for the target role
+    - Provides specific improvement suggestions
+    - Shows before/after comparison
+    
+    **Tailoring Levels**:
+    - `conservative`: Minimal changes, maintains authenticity
+    - `moderate`: Balanced optimization (recommended)
+    - `aggressive`: Comprehensive restructuring for maximum match
+    
+    **Example Use Case**:
+    ```
+    User finds dream job posting → Pastes job description → 
+    Gets tailored resume highlighting relevant experience → 
+    Increases interview chances by 50%+
+    ```
+    
+    Args:
+        resume_id: ID of the resume to tailor
+        job_description: Full text of the target job posting
+        tailoring_level: How aggressive to optimize (default: moderate)
+        
+    Returns:
+        TailorResumeResponse with tailored resume and analysis
+    """
+    try:
+        logger.info(f"Tailoring request - User: {current_user.email}, Resume ID: {request.resume_id}, Level: {request.tailoring_level}")
+        
+        # Validate tailoring level
+        valid_levels = ["conservative", "moderate", "aggressive"]
+        if request.tailoring_level not in valid_levels:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid tailoring level. Must be one of: {', '.join(valid_levels)}"
+            )
+        
+        # Fetch the document
+        result = await db.execute(
+            select(Document).where(
+                Document.id == request.resume_id,
+                Document.user_id == current_user.id
+            )
+        )
+        document = result.scalar_one_or_none()
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found or you don't have permission to access it"
+            )
+        
+        if not document.extracted_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Document has no extracted text. Please upload a valid resume."
+            )
+        
+        # Call AI tailoring service
+        logger.info("Calling AI tailoring service...")
+        result = await tailor_resume_to_job(
+            resume_text=document.extracted_text,
+            job_description=request.job_description,
+            tailoring_level=request.tailoring_level
+        )
+        
+        # Log the result
+        logger.info(
+            f"Tailoring complete - Match score: {result['match_score']}%, "
+            f"Missing skills: {len(result['missing_skills'])}, "
+            f"Changes: {len(result['changes_made'])}"
+        )
+        
+        # Return response
+        return TailorResumeResponse(
+            tailored_resume=result["tailored_resume"],
+            original_resume=result["original_resume"],
+            match_score=result["match_score"],
+            missing_skills=result["missing_skills"],
+            keyword_suggestions=result["keyword_suggestions"],
+            changes_made=result["changes_made"],
+            priority_improvements=result["priority_improvements"],
+            tailoring_level=result["tailoring_level"],
+            latency=result["latency"],
+            api_status=result["api_status"],
+            warning=result.get("warning")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resume tailoring error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Resume tailoring failed: {str(e)}"
+        )
