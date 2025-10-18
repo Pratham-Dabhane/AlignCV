@@ -1,12 +1,12 @@
 """
-Vector Embedding Utilities - Phase 5/6
+Vector Embedding Utilities - Phase 6.1
 
-Handles text-to-vector embeddings using Mistral AI or sentence-transformers fallback.
+Handles text-to-vector embeddings using BGE-base-en-v1.5 (768-dim).
+Upgraded from all-MiniLM-L6-v2 (384-dim) for better semantic search quality.
 """
 
 import logging
 from typing import List, Optional
-import httpx
 from sentence_transformers import SentenceTransformer
 
 from ..config import Settings
@@ -21,74 +21,36 @@ def get_sentence_transformer_model() -> SentenceTransformer:
     """
     Load and cache sentence-transformers model.
     
-    Uses 'all-MiniLM-L6-v2' for fast, high-quality embeddings.
-    Model size: ~90MB, Embedding dimension: 384
+    Uses 'BAAI/bge-base-en-v1.5' for high-quality semantic search.
+    Model size: ~440MB, Embedding dimension: 768
+    Best for: Information retrieval, semantic similarity
     """
     global _sentence_transformer_model
     
     if _sentence_transformer_model is None:
-        logger.info("Loading sentence-transformers model: all-MiniLM-L6-v2")
-        _sentence_transformer_model = SentenceTransformer('all-MiniLM-L6-v2')
-        logger.info("Model loaded successfully")
+        logger.info("Loading sentence-transformers model: BAAI/bge-base-en-v1.5")
+        _sentence_transformer_model = SentenceTransformer('BAAI/bge-base-en-v1.5')
+        logger.info("BGE-base-en-v1.5 model loaded successfully (768-dim)")
     
     return _sentence_transformer_model
-
-
-async def get_mistral_embedding(text: str, api_key: str) -> Optional[List[float]]:
-    """
-    Get embedding from Mistral AI API.
-    
-    Args:
-        text: Text to embed
-        api_key: Mistral API key
-        
-    Returns:
-        Embedding vector or None if failed
-    """
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.mistral.ai/v1/embeddings",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "mistral-embed",
-                    "input": [text]
-                }
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                embedding = data["data"][0]["embedding"]
-                logger.info(f"Mistral embedding generated: {len(embedding)} dimensions")
-                return embedding
-            else:
-                logger.warning(f"Mistral API error: {response.status_code} - {response.text}")
-                return None
-                
-    except Exception as e:
-        logger.error(f"Mistral embedding error: {e}")
-        return None
 
 
 def get_local_embedding(text: str) -> List[float]:
     """
     Get embedding using local sentence-transformers model.
     
-    Fallback when Mistral API is unavailable.
+    Uses BGE-base-en-v1.5 for optimal semantic search performance.
     
     Args:
         text: Text to embed
         
     Returns:
-        Embedding vector (384 dimensions)
+        Embedding vector (768 dimensions)
     """
     try:
         model = get_sentence_transformer_model()
         embedding = model.encode(text, convert_to_numpy=True)
-        logger.info(f"Local embedding generated: {len(embedding)} dimensions")
+        logger.info(f"BGE embedding generated: {len(embedding)} dimensions")
         return embedding.tolist()
     except Exception as e:
         logger.error(f"Local embedding error: {e}")
@@ -99,19 +61,17 @@ async def get_job_embedding(text: str, settings: Settings) -> List[float]:
     """
     Generate embedding for job description.
     
-    Uses local model for consistency (384 dimensions).
-    Mistral embeddings are 1024-dim, which requires different Qdrant collection setup.
+    Uses BGE-base-en-v1.5 for optimal semantic search (768 dimensions).
     
     Args:
         text: Job description text
         settings: Application settings
         
     Returns:
-        Embedding vector (384 dimensions)
+        Embedding vector (768 dimensions)
     """
-    # Use local model for consistent 384-dimensional embeddings
-    # Note: To use Mistral (1024-dim), recreate Qdrant collection with size=1024
-    logger.info("Using local embedding model for job (384-dim)")
+    # Use BGE-base-en-v1.5 for high-quality semantic embeddings
+    logger.info("Using BGE-base-en-v1.5 embedding model for job (768-dim)")
     return get_local_embedding(text)
 
 
@@ -119,17 +79,17 @@ async def get_resume_embedding(text: str, settings: Settings) -> List[float]:
     """
     Generate embedding for resume/CV.
     
-    Uses local model for consistency (384 dimensions).
+    Uses BGE-base-en-v1.5 for optimal semantic search (768 dimensions).
     
     Args:
         text: Resume text
         settings: Application settings
         
     Returns:
-        Embedding vector (384 dimensions)
+        Embedding vector (768 dimensions)
     """
-    # Use local model for consistent 384-dimensional embeddings
-    logger.info("Using local embedding model for resume (384-dim)")
+    # Use BGE-base-en-v1.5 for high-quality semantic embeddings
+    logger.info("Using BGE-base-en-v1.5 embedding model for resume (768-dim)")
     return get_local_embedding(text)
 
 
