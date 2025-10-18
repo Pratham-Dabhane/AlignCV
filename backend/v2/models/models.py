@@ -5,6 +5,9 @@ Models:
 - User: User accounts with email/password or Google OAuth
 - Document: Uploaded resumes/CVs with parsed content
 - DocumentVersion: Rewritten versions of documents with AI metadata
+- Job: Job postings from various sources
+- JobBookmark: User-saved jobs
+- JobApplication: User job applications
 """
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, Float, JSON
@@ -32,6 +35,8 @@ class User(Base):
     # Relationships
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
     document_versions = relationship("DocumentVersion", back_populates="user", cascade="all, delete-orphan")
+    bookmarks = relationship("JobBookmark", back_populates="user", cascade="all, delete-orphan")
+    applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', name='{self.name}')>"
@@ -103,3 +108,100 @@ class DocumentVersion(Base):
     
     def __repr__(self):
         return f"<DocumentVersion(id={self.id}, document_id={self.document_id}, style='{self.rewrite_style}')>"
+
+
+class Job(Base):
+    """
+    Job posting model.
+    
+    Stores job listings from various sources with normalized fields.
+    """
+    __tablename__ = "jobs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(String(255), unique=True, nullable=False, index=True)  # External job ID
+    source = Column(String(50), nullable=False, index=True)  # linkedin, angellist, indeed, etc.
+    title = Column(String(500), nullable=False, index=True)
+    company = Column(String(255), nullable=False, index=True)
+    description = Column(Text, nullable=False)
+    url = Column(Text, nullable=False)
+    location = Column(String(255), nullable=True)
+    tags = Column(JSON, nullable=True)  # Skills, technologies, etc.
+    salary_min = Column(Integer, nullable=True)
+    salary_max = Column(Integer, nullable=True)
+    employment_type = Column(String(50), nullable=True)  # full-time, part-time, contract
+    experience_level = Column(String(50), nullable=True)  # entry, mid, senior
+    vector_id = Column(String(255), nullable=True, index=True)  # Qdrant vector ID
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    bookmarks = relationship("JobBookmark", back_populates="job", cascade="all, delete-orphan")
+    applications = relationship("JobApplication", back_populates="job", cascade="all, delete-orphan")
+    
+    # Indexes for common queries
+    __table_args__ = (
+        Index('idx_source_created', 'source', 'created_at'),
+        Index('idx_company_title', 'company', 'title'),
+    )
+    
+    def __repr__(self):
+        return f"<Job(id={self.id}, job_id='{self.job_id}', title='{self.title}', company='{self.company}')>"
+
+
+class JobBookmark(Base):
+    """
+    Job bookmark model.
+    
+    Tracks user-saved jobs for later review.
+    """
+    __tablename__ = "job_bookmarks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="bookmarks")
+    job = relationship("Job", back_populates="bookmarks")
+    
+    # Unique constraint: user can only bookmark a job once
+    __table_args__ = (
+        Index('idx_user_job_unique', 'user_id', 'job_id', unique=True),
+    )
+    
+    def __repr__(self):
+        return f"<JobBookmark(id={self.id}, user_id={self.user_id}, job_id={self.job_id})>"
+
+
+class JobApplication(Base):
+    """
+    Job application model.
+    
+    Tracks jobs the user has applied to.
+    """
+    __tablename__ = "job_applications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="applied")  # applied, interviewing, offered, rejected
+    applied_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    user = relationship("User", back_populates="applications")
+    job = relationship("Job", back_populates="applications")
+    
+    # Unique constraint: user can only apply to a job once
+    __table_args__ = (
+        Index('idx_user_job_app_unique', 'user_id', 'job_id', unique=True),
+        Index('idx_user_status', 'user_id', 'status'),
+    )
+    
+    def __repr__(self):
+        return f"<JobApplication(id={self.id}, user_id={self.user_id}, job_id={self.job_id}, status='{self.status}')>"

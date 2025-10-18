@@ -21,6 +21,7 @@ from .database import init_db
 from .auth.routes import router as auth_router
 from .documents.routes import router as documents_router
 from .ai.routes import router as ai_router
+from .jobs.routes import router as jobs_router
 
 # Security scheme for OpenAPI docs
 security = HTTPBearer()
@@ -95,7 +96,7 @@ app_v2.add_middleware(
 app_v2.include_router(auth_router)
 app_v2.include_router(documents_router)
 app_v2.include_router(ai_router)
-
+app_v2.include_router(jobs_router)
 
 @app_v2.get("/v2/")
 async def root():
@@ -110,7 +111,9 @@ async def root():
             "Document Upload (PDF/DOCX)",
             "NLP Extraction (Skills, Roles, Entities)",
             "Document Management",
-            "AI Resume Rewriting (Mistral 7B)"
+            "AI Resume Rewriting (Mistral 7B)",
+            "Job Matching & Ranking (Qdrant + Embeddings)",
+            "Job Bookmarks & Applications"
         ]
     }
 

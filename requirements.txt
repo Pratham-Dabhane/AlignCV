@@ -70,6 +70,11 @@ openai==1.6.0
 
 # Vector Database
 qdrant-client==1.7.0
+sentence-transformers==2.7.0
+
+# Job Scraping
+beautifulsoup4==4.12.2
+feedparser==6.0.11
 
 # Environment & Config
 python-dotenv==1.0.0
