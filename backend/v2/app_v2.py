@@ -4,13 +4,13 @@ AlignCV V2 Main Application.
 Includes:
 - Authentication (JWT + Google OAuth)
 - Document upload and parsing
-- Maintains V1 compatibility
+- AI-powered resume rewriting
+- Job matching and notifications
+- Structured logging and monitoring
 
-V1 routes remain accessible at their original paths.
-V2 routes use /v2 prefix.
+V2 routes use /v2 prefix for consistency.
 """
 
-import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -18,6 +18,8 @@ from contextlib import asynccontextmanager
 
 from .config import settings
 from .database import init_db
+from .logging_config import setup_logging, get_logger
+from .middleware import RequestLoggingMiddleware
 from .auth.routes import router as auth_router
 from .documents.routes import router as documents_router
 from .ai.routes import router as ai_router
@@ -27,17 +29,16 @@ from .notifications.routes import router as notifications_router
 # Security scheme for OpenAPI docs
 security = HTTPBearer()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO if settings.debug else logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/v2_app.log'),
-        logging.StreamHandler()
-    ]
+# Configure centralized logging
+setup_logging(
+    log_level=settings.log_level if hasattr(settings, 'log_level') else 'INFO',
+    log_file='logs/app.log',
+    enable_sentry=settings.sentry_dsn is not None if hasattr(settings, 'sentry_dsn') else False,
+    sentry_dsn=getattr(settings, 'sentry_dsn', None),
+    environment=settings.environment
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -92,6 +93,9 @@ app_v2.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add request logging middleware
+app_v2.add_middleware(RequestLoggingMiddleware)
 
 # Include routers
 app_v2.include_router(auth_router)

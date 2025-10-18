@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     celery_result_backend: Optional[str] = None
     
     # ========================================
+    # Logging & Monitoring (Phase 8)
+    # ========================================
+    log_level: str = "INFO"
+    sentry_dsn: Optional[str] = None  # Sentry error tracking
+    sentry_environment: Optional[str] = None
+    
+    # ========================================
     # File Storage
     # ========================================
     storage_backend: str = "local"  # 'local', 'firebase', or 's3'

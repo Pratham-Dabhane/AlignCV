@@ -86,3 +86,20 @@ transformers==4.36.0
 # Additional Testing
 httpx==0.25.2
 faker==21.0.0
+
+# ============================================
+# PHASE 8: MONITORING & DEPLOYMENT
+# ============================================
+
+# Error Tracking & Monitoring
+sentry-sdk[fastapi]==1.39.2
+
+# Testing & Coverage
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Docker
+gunicorn==21.2.0
+

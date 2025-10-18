@@ -27,7 +27,7 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v2", tags=["Documents"])
+router = APIRouter(prefix="/v2/documents", tags=["Documents"])
 
 # Security scheme for JWT authentication
 security = HTTPBearer()
@@ -175,7 +175,7 @@ async def upload_document(
             os.unlink(temp_path)
 
 
-@router.get("/documents")
+@router.get("/")
 async def list_documents(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -213,7 +213,7 @@ async def list_documents(
     }
 
 
-@router.get("/documents/{doc_id}")
+@router.get("/{doc_id}")
 async def get_document(
     doc_id: int,
     current_user: User = Depends(get_current_user),
@@ -263,7 +263,7 @@ async def get_document(
     }
 
 
-@router.delete("/documents/{doc_id}")
+@router.delete("/{doc_id}")
 async def delete_document(
     doc_id: int,
     current_user: User = Depends(get_current_user),

@@ -279,7 +279,7 @@ class Notification(Base):
     
     __table_args__ = (
         Index('idx_user_unread', 'user_id', 'is_read'),
-        Index('idx_user_created', 'user_id', 'created_at'),
+        Index('idx_notification_user_created', 'user_id', 'created_at'),
     )
     
     def __repr__(self):
