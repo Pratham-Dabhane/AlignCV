@@ -13,12 +13,17 @@ V2 routes use /v2 prefix.
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer
 from contextlib import asynccontextmanager
 
 from .config import settings
 from .database import init_db
 from .auth.routes import router as auth_router
 from .documents.routes import router as documents_router
+from .ai.routes import router as ai_router
+
+# Security scheme for OpenAPI docs
+security = HTTPBearer()
 
 # Configure logging
 logging.basicConfig(
@@ -71,7 +76,10 @@ app_v2 = FastAPI(
     lifespan=lifespan,
     docs_url="/v2/docs",
     redoc_url="/v2/redoc",
-    openapi_url="/v2/openapi.json"
+    openapi_url="/v2/openapi.json",
+    swagger_ui_parameters={
+        "persistAuthorization": True  # Keep authorization between page refreshes
+    }
 )
 
 # Configure CORS
@@ -86,6 +94,7 @@ app_v2.add_middleware(
 # Include routers
 app_v2.include_router(auth_router)
 app_v2.include_router(documents_router)
+app_v2.include_router(ai_router)
 
 
 @app_v2.get("/v2/")
@@ -100,7 +109,8 @@ async def root():
             "Google OAuth",
             "Document Upload (PDF/DOCX)",
             "NLP Extraction (Skills, Roles, Entities)",
-            "Document Management"
+            "Document Management",
+            "AI Resume Rewriting (Mistral 7B)"
         ]
     }
 

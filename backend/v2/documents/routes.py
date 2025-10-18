@@ -11,7 +11,8 @@ Endpoints:
 import logging
 import os
 import tempfile
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Header
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
@@ -28,16 +29,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v2", tags=["Documents"])
 
+# Security scheme for JWT authentication
+security = HTTPBearer()
+
 
 async def get_current_user(
-    authorization: str = Header(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
     Dependency to get current authenticated user from JWT token.
     
     Args:
-        authorization: Authorization header with Bearer token
+        credentials: HTTP Bearer credentials with JWT token
         db: Database session
         
     Returns:
@@ -46,13 +50,7 @@ async def get_current_user(
     Raises:
         HTTPException: 401 if token is invalid or user not found
     """
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header"
-        )
-    
-    token = authorization.replace("Bearer ", "")
+    token = credentials.credentials
     email = decode_token(token)
     
     if not email:

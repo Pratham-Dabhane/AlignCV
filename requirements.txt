@@ -64,6 +64,10 @@ celery==5.3.4
 # Email
 sendgrid==6.11.0
 
+# AI & LLM
+mistralai==0.1.0
+openai==1.6.0
+
 # Vector Database
 qdrant-client==1.7.0
 

@@ -4,9 +4,10 @@ Database models for AlignCV V2.
 Models:
 - User: User accounts with email/password or Google OAuth
 - Document: Uploaded resumes/CVs with parsed content
+- DocumentVersion: Rewritten versions of documents with AI metadata
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, Float, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from ..database import Base
@@ -30,6 +31,7 @@ class User(Base):
     
     # Relationships
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
+    document_versions = relationship("DocumentVersion", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', name='{self.name}')>"
@@ -56,6 +58,7 @@ class Document(Base):
     
     # Relationships
     user = relationship("User", back_populates="documents")
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
     
     # Indexes for common queries
     __table_args__ = (
@@ -65,3 +68,38 @@ class Document(Base):
     
     def __repr__(self):
         return f"<Document(id={self.id}, user_id={self.user_id}, file_name='{self.file_name}')>"
+
+
+class DocumentVersion(Base):
+    """
+    Document version model (AI-rewritten resume versions).
+    
+    Stores original and rewritten text with metadata about improvements.
+    """
+    __tablename__ = "document_versions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    original_text = Column(Text, nullable=False)  # Original resume text
+    rewritten_text = Column(Text, nullable=False)  # AI-rewritten text
+    rewrite_style = Column(String(50), nullable=False)  # Technical, Management, Creative
+    improvements = Column(JSON, nullable=False)  # List of improvements made
+    impact_score = Column(Integer, nullable=False, default=0)  # 0-100 score
+    keyphrases = Column(JSON, nullable=True)  # Extracted keyphrases
+    api_latency = Column(Float, nullable=False, default=0.0)  # API call latency in seconds
+    api_status = Column(String(20), nullable=False)  # success, fallback, error
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relationships
+    document = relationship("Document", back_populates="versions")
+    user = relationship("User", back_populates="document_versions")
+    
+    # Indexes for common queries
+    __table_args__ = (
+        Index('idx_doc_created', 'document_id', 'created_at'),
+        Index('idx_user_style', 'user_id', 'rewrite_style'),
+    )
+    
+    def __repr__(self):
+        return f"<DocumentVersion(id={self.id}, document_id={self.document_id}, style='{self.rewrite_style}')>"
