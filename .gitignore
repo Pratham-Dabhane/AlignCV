@@ -58,7 +58,6 @@ logs/
 
 # V2 Specific
 .env
-firebase-service-account.json
 storage/uploads/
 *.db
 *.sqlite

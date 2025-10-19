@@ -13,9 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field
 
-from ..database import get_db
+from ..database import get_db, get_supabase_client
 from ..models.models import Document, DocumentVersion, User
 from ..auth.utils import verify_token
+from supabase import Client
 from .rewrite_engine import rewrite_resume, extract_keyphrases, tailor_resume_to_job
 from ..config import settings
 
@@ -37,14 +38,14 @@ security = HTTPBearer()
 # Schemas
 class RewriteRequest(BaseModel):
     """Request schema for resume rewriting."""
-    resume_id: int = Field(..., description="ID of the document to rewrite")
+    resume_id: str = Field(..., description="ID of the document to rewrite (UUID)")
     rewrite_style: str = Field(..., description="Style: Technical, Management, or Creative")
 
 
 class RewriteResponse(BaseModel):
     """Response schema for resume rewriting."""
-    version_id: int
-    resume_id: int
+    version_id: int  # Temporary: 0 until versions table created
+    resume_id: str  # UUID
     original_text: str
     rewritten_text: str
     diff_html: str
@@ -57,10 +58,10 @@ class RewriteResponse(BaseModel):
 
 
 # Dependency: Get current user from JWT token
-async def get_current_user(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> User:
+    db: Client = Depends(get_supabase_client)
+):
     """Extract and verify user from Bearer token."""
     token = credentials.credentials
     
@@ -88,23 +89,22 @@ async def get_current_user(
         )
     
     # Fetch user from database
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
+    result = db.table('users').select('*').eq('email', email).execute()
     
-    if not user:
+    if not result.data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
     
-    return user
+    return result.data[0]
 
 
 @router.post("/", response_model=RewriteResponse)
 async def rewrite(
     request: RewriteRequest,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    db: Client = Depends(get_supabase_client),
+    user = Depends(get_current_user)
 ):
     """
     Rewrite a resume document with Mistral AI.
@@ -115,25 +115,26 @@ async def rewrite(
     Returns rewritten version with diff and improvements.
     """
     
-    logger.info(f"Rewrite request - User: {user.email}, Document: {request.resume_id}, Style: {request.rewrite_style}")
+    logger.info(f"Rewrite request - User: {user['email']}, Document: {request.resume_id}, Style: {request.rewrite_style}")
     
     # Fetch document
-    result = await db.execute(
-        select(Document).where(
-            Document.id == request.resume_id,
-            Document.user_id == user.id
-        )
-    )
-    document = result.scalar_one_or_none()
+    result = db.table('documents').select('*').eq('id', request.resume_id).eq('user_id', user['id']).execute()
     
-    if not document:
-        logger.warning(f"Document {request.resume_id} not found for user {user.email}")
+    if not result.data:
+        logger.warning(f"Document {request.resume_id} not found for user {user['email']}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or access denied"
         )
     
-    if not document.extracted_text:
+    document = result.data[0]
+    
+    # Extract text from parsed_content
+    extracted_text = None
+    if document.get('parsed_content'):
+        extracted_text = document['parsed_content'].get('text')
+    
+    if not extracted_text:
         logger.warning(f"Document {request.resume_id} has no extracted text")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -145,40 +146,25 @@ async def rewrite(
         start_time = datetime.utcnow()
         
         rewrite_result = await rewrite_resume(
-            resume_text=document.extracted_text,
+            resume_text=extracted_text,
             style=request.rewrite_style,
             timeout=30
         )
         
         # Generate diff
         diff_html = _generate_diff_html(
-            document.extracted_text,
+            extracted_text,
             rewrite_result["rewritten_text"]
         )
         
         # Extract keyphrases from rewritten text
         keyphrases = await extract_keyphrases(rewrite_result["rewritten_text"])
         
-        # Create document version
-        version = DocumentVersion(
-            document_id=document.id,
-            user_id=user.id,
-            original_text=document.extracted_text,
-            rewritten_text=rewrite_result["rewritten_text"],
-            rewrite_style=request.rewrite_style,
-            improvements=rewrite_result["improvements"],
-            impact_score=rewrite_result["impact_score"],
-            keyphrases=keyphrases,
-            api_latency=rewrite_result["latency"],
-            api_status=rewrite_result["api_status"]
-        )
-        
-        db.add(version)
-        await db.commit()
-        await db.refresh(version)
+        # TODO: Save document version to Supabase when versions table is created
+        # For now, just return the result without saving
         
         logger.info(
-            f"Rewrite complete - Version: {version.id}, "
+            f"Rewrite complete - "
             f"Latency: {rewrite_result['latency']}s, "
             f"Status: {rewrite_result['api_status']}, "
             f"Original: {rewrite_result['original_length']} chars, "
@@ -186,9 +172,9 @@ async def rewrite(
         )
         
         return RewriteResponse(
-            version_id=version.id,
-            resume_id=document.id,
-            original_text=document.extracted_text,
+            version_id=0,  # Temporary: versions not yet implemented in Supabase
+            resume_id=request.resume_id,
+            original_text=extracted_text,
             rewritten_text=rewrite_result["rewritten_text"],
             diff_html=diff_html,
             improvements=rewrite_result["improvements"],
@@ -207,90 +193,26 @@ async def rewrite(
         )
 
 
-@router.get("/versions/{resume_id}")
-async def get_rewrite_versions(
-    resume_id: int,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
-):
-    """
-    Get all rewrite versions for a document.
-    
-    - **resume_id**: Document ID
-    
-    Returns list of all versions with metadata.
-    """
-    
-    # Verify document ownership
-    result = await db.execute(
-        select(Document).where(
-            Document.id == resume_id,
-            Document.user_id == user.id
-        )
-    )
-    document = result.scalar_one_or_none()
-    
-    if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found or access denied"
-        )
-    
-    # Fetch all versions
-    result = await db.execute(
-        select(DocumentVersion)
-        .where(DocumentVersion.document_id == resume_id)
-        .order_by(DocumentVersion.created_at.desc())
-    )
-    versions = result.scalars().all()
-    
-    logger.info(f"Retrieved {len(versions)} versions for document {resume_id}")
-    
-    return {
-        "resume_id": resume_id,
-        "versions": [
-            {
-                "version_id": v.id,
-                "style": v.rewrite_style,
-                "impact_score": v.impact_score,
-                "improvements": v.improvements,
-                "keyphrases": v.keyphrases,
-                "created_at": v.created_at.isoformat(),
-                "api_status": v.api_status
-            }
-            for v in versions
-        ]
-    }
-
-
-@router.get("/version/{version_id}")
-async def get_version_detail(
-    version_id: int,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
-):
-    """
-    Get detailed view of a specific rewrite version.
-    
-    - **version_id**: Version ID
-    
-    Returns full version with original and rewritten text.
-    """
-    
-    # Fetch version
-    result = await db.execute(
-        select(DocumentVersion).where(
-            DocumentVersion.id == version_id,
-            DocumentVersion.user_id == user.id
-        )
-    )
-    version = result.scalar_one_or_none()
-    
-    if not version:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Version not found or access denied"
-        )
+# TEMPORARILY DISABLED - Requires document_versions table
+# Uncomment and convert these endpoints after creating document_versions table in Supabase
+#
+# @router.get("/versions/{resume_id}")
+# async def get_rewrite_versions(
+#     resume_id: int,
+#     db: AsyncSession = Depends(get_db),
+#     user: User = Depends(get_current_user)
+# ):
+#     """Get all rewrite versions for a document."""
+#     pass
+#
+# @router.get("/version/{version_id}")
+# async def get_version_detail(
+#     version_id: int,
+#     db: AsyncSession = Depends(get_db),
+#     user: User = Depends(get_current_user)
+# ):
+#     """Get detailed view of a specific rewrite version."""
+#     pass
     
     # Generate diff
     diff_html = _generate_diff_html(version.original_text, version.rewritten_text)
@@ -351,7 +273,7 @@ def _generate_diff_html(original: str, rewritten: str) -> str:
 
 class TailorResumeRequest(BaseModel):
     """Request schema for resume tailoring to specific job."""
-    resume_id: int = Field(..., description="ID of the document to tailor")
+    resume_id: str = Field(..., description="ID of the document to tailor (UUID)")
     job_description: str = Field(..., min_length=50, description="Target job description")
     tailoring_level: str = Field(
         default="moderate",
@@ -377,8 +299,8 @@ class TailorResumeResponse(BaseModel):
 @router.post("/tailor-to-job", response_model=TailorResumeResponse)
 async def tailor_resume_to_job_endpoint(
     request: TailorResumeRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """
     **PHASE 9: Resume Tailoring**
@@ -413,7 +335,7 @@ async def tailor_resume_to_job_endpoint(
         TailorResumeResponse with tailored resume and analysis
     """
     try:
-        logger.info(f"Tailoring request - User: {current_user.email}, Resume ID: {request.resume_id}, Level: {request.tailoring_level}")
+        logger.info(f"Tailoring request - User: {current_user['email']}, Resume ID: {request.resume_id}, Level: {request.tailoring_level}")
         
         # Validate tailoring level
         valid_levels = ["conservative", "moderate", "aggressive"]
@@ -424,21 +346,22 @@ async def tailor_resume_to_job_endpoint(
             )
         
         # Fetch the document
-        result = await db.execute(
-            select(Document).where(
-                Document.id == request.resume_id,
-                Document.user_id == current_user.id
-            )
-        )
-        document = result.scalar_one_or_none()
+        result = db.table('documents').select('*').eq('id', request.resume_id).eq('user_id', current_user['id']).execute()
         
-        if not document:
+        if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Document not found or you don't have permission to access it"
             )
         
-        if not document.extracted_text:
+        document = result.data[0]
+        
+        # Extract text from parsed_content
+        extracted_text = None
+        if document.get('parsed_content'):
+            extracted_text = document['parsed_content'].get('text')
+        
+        if not extracted_text:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Document has no extracted text. Please upload a valid resume."
@@ -447,7 +370,7 @@ async def tailor_resume_to_job_endpoint(
         # Call AI tailoring service
         logger.info("Calling AI tailoring service...")
         result = await tailor_resume_to_job(
-            resume_text=document.extracted_text,
+            resume_text=extracted_text,
             job_description=request.job_description,
             tailoring_level=request.tailoring_level
         )

@@ -19,9 +19,9 @@ class Settings(BaseSettings):
     """
     
     # ========================================
-    # Database
+    # Database (Supabase PostgreSQL)
     # ========================================
-    database_url: str
+    database_url: str  # Full PostgreSQL connection string from Supabase
     
     # ========================================
     # JWT Authentication
@@ -39,15 +39,12 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/v2/auth/google/callback"
     
     # ========================================
-    # Firebase Storage
+    # Supabase (PostgreSQL + Storage)
     # ========================================
-    firebase_api_key: Optional[str] = None
-    firebase_auth_domain: Optional[str] = None
-    firebase_project_id: Optional[str] = None
-    firebase_storage_bucket: Optional[str] = None
-    firebase_messaging_sender_id: Optional[str] = None
-    firebase_app_id: Optional[str] = None
-    firebase_service_account_path: Optional[str] = None
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
+    supabase_service_role_key: Optional[str] = None
+    supabase_storage_bucket: str = "aligncv-resumes"
     
     # ========================================
     # Mistral AI
@@ -88,7 +85,7 @@ class Settings(BaseSettings):
     # ========================================
     # File Storage
     # ========================================
-    storage_backend: str = "local"  # 'local', 'firebase', or 's3'
+    storage_backend: str = "local"  # 'local', 'supabase', or 's3'
     local_storage_path: str = "./storage/uploads"
     max_file_size_mb: int = 5
     

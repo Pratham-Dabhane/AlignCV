@@ -3,7 +3,7 @@ File storage utilities for AlignCV V2.
 
 Supports:
 - Local file storage
-- Firebase Storage (optional)
+- Supabase Storage (cloud storage)
 - AWS S3 (optional)
 """
 
@@ -99,22 +99,161 @@ class LocalStorage:
         return str(Path(self.base_path) / storage_path)
 
 
-class FirebaseStorage:
+class SupabaseStorage:
     """
-    Firebase Storage handler (placeholder).
+    Supabase Storage handler using Supabase Python client.
     
-    Implement when Firebase credentials are available.
+    Requires Supabase project with Storage enabled.
     """
     
     def __init__(self):
-        logger.warning("FirebaseStorage not implemented yet")
-        raise NotImplementedError("Firebase storage coming in Phase 2")
+        """Initialize Supabase Storage with credentials."""
+        try:
+            from supabase import create_client, Client
+            
+            if not settings.supabase_url:
+                raise ValueError("SUPABASE_URL not set in .env")
+            
+            if not settings.supabase_service_role_key:
+                raise ValueError("SUPABASE_SERVICE_ROLE_KEY not set in .env")
+            
+            # Initialize Supabase client with service role key (full access)
+            self.client: Client = create_client(
+                settings.supabase_url,
+                settings.supabase_service_role_key
+            )
+            self.bucket_name = settings.supabase_storage_bucket
+            
+            # Verify bucket exists (or just log warning if we can't check)
+            try:
+                self.client.storage.get_bucket(self.bucket_name)
+                logger.info(f"Supabase Storage initialized with bucket: {self.bucket_name}")
+            except Exception as e:
+                logger.warning(f"Could not verify bucket '{self.bucket_name}': {e}")
+                logger.warning(f"Please ensure bucket '{self.bucket_name}' exists in Supabase Dashboard")
+                logger.info(f"Supabase Storage initialized (bucket verification skipped)")
+            
+        except ImportError:
+            logger.error("supabase package not installed. Run: pip install supabase")
+            raise
+        except Exception as e:
+            logger.error(f"Supabase Storage initialization failed: {str(e)}")
+            raise
     
     def save_file(self, file_path: str, user_id: int, original_filename: str) -> str:
-        raise NotImplementedError()
+        """
+        Upload file to Supabase Storage.
+        
+        Args:
+            file_path: Local temporary file path
+            user_id: User ID
+            original_filename: Original filename
+            
+        Returns:
+            Supabase storage path
+        """
+        try:
+            # Generate unique storage path
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            storage_path = f"user_{user_id}/{timestamp}_{original_filename}"
+            
+            # Read file content
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Upload to Supabase Storage
+            response = self.client.storage.from_(self.bucket_name).upload(
+                path=storage_path,
+                file=file_content,
+                file_options={"content-type": "application/octet-stream"}
+            )
+            
+            logger.info(f"File uploaded to Supabase Storage: {storage_path}")
+            return storage_path
+            
+        except Exception as e:
+            logger.error(f"Supabase Storage upload failed: {str(e)}")
+            raise
     
     def delete_file(self, storage_path: str) -> bool:
-        raise NotImplementedError()
+        """
+        Delete file from Supabase Storage.
+        
+        Args:
+            storage_path: Supabase storage path
+            
+        Returns:
+            True if deleted successfully
+        """
+        try:
+            response = self.client.storage.from_(self.bucket_name).remove([storage_path])
+            logger.info(f"File deleted from Supabase Storage: {storage_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Supabase Storage deletion failed: {str(e)}")
+            return False
+    
+    def get_file_url(self, storage_path: str, expiration: int = 3600) -> Optional[str]:
+        """
+        Get signed URL for file download.
+        
+        Args:
+            storage_path: Supabase storage path
+            expiration: URL expiration in seconds (default 1 hour)
+            
+        Returns:
+            Signed URL or None if file doesn't exist
+        """
+        try:
+            response = self.client.storage.from_(self.bucket_name).create_signed_url(
+                path=storage_path,
+                expires_in=expiration
+            )
+            return response.get('signedURL')
+        except Exception as e:
+            logger.error(f"Failed to generate signed URL: {str(e)}")
+            return None
+    
+    def download_file(self, storage_path: str, destination_path: str) -> bool:
+        """
+        Download file from Supabase Storage to local path.
+        
+        Args:
+            storage_path: Supabase storage path
+            destination_path: Local destination path
+            
+        Returns:
+            True if downloaded successfully
+        """
+        try:
+            response = self.client.storage.from_(self.bucket_name).download(storage_path)
+            
+            # Write to destination
+            with open(destination_path, 'wb') as f:
+                f.write(response)
+            
+            logger.info(f"File downloaded from Supabase Storage: {storage_path} -> {destination_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Supabase Storage download failed: {str(e)}")
+            return False
+    
+    def get_public_url(self, storage_path: str) -> Optional[str]:
+        """
+        Get public URL for file (if bucket is public).
+        
+        Args:
+            storage_path: Supabase storage path
+            
+        Returns:
+            Public URL or None
+        """
+        try:
+            response = self.client.storage.from_(self.bucket_name).get_public_url(storage_path)
+            return response
+        except Exception as e:
+            logger.error(f"Failed to get public URL: {str(e)}")
+            return None
 
 
 class S3Storage:
@@ -146,8 +285,8 @@ def get_storage():
     
     if backend == "local":
         return LocalStorage()
-    elif backend == "firebase":
-        return FirebaseStorage()
+    elif backend == "supabase":
+        return SupabaseStorage()
     elif backend == "s3":
         return S3Storage()
     else:

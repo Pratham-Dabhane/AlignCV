@@ -1,65 +1,62 @@
 """
 Database connection and session management for AlignCV V2.
 
-Uses SQLAlchemy async engine for PostgreSQL.
+Uses Supabase client for database operations (bypasses IPv6 connection issues).
 """
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from supabase import create_client, Client
+from typing import Optional
 from .config import settings
 
-# Create async engine
-# Convert postgresql:// to postgresql+asyncpg:// for async support
-database_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
+# Global Supabase client
+_supabase_client: Optional[Client] = None
 
-engine = create_async_engine(
-    database_url,
-    echo=settings.debug,  # Log SQL queries in debug mode
-    future=True,
-    pool_pre_ping=True,  # Verify connections before using
-)
+def get_supabase_client() -> Client:
+    """Get or create Supabase client."""
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = create_client(
+            settings.supabase_url,
+            settings.supabase_service_role_key
+        )
+    return _supabase_client
 
-# Session factory
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+# For backward compatibility, keep these but they won't be used
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
 
-# Base class for models
+engine = None  # Not used with Supabase client
+AsyncSessionLocal = None  # Not used with Supabase client
+
+# Base class for models (kept for compatibility)
 Base = declarative_base()
 
 
-async def get_db():
+def get_db():
     """
-    Dependency for FastAPI routes to get database session.
+    Dependency for FastAPI routes to get Supabase client.
     
-    Yields:
-        AsyncSession: Database session
+    Returns:
+        Client: Supabase client
         
     Example:
         @router.get("/users")
-        async def get_users(db: AsyncSession = Depends(get_db)):
+        def get_users(db: Client = Depends(get_db)):
             ...
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    return get_supabase_client()
 
 
 async def init_db():
     """
-    Initialize database tables.
+    Initialize database connection.
     
-    Creates all tables defined in models.
-    Use Alembic for production migrations.
+    Verifies Supabase connection is working.
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        client = get_supabase_client()
+        # Test connection by checking if we can access storage
+        client.storage.list_buckets()
+        return True
+    except Exception as e:
+        raise Exception(f"Failed to connect to Supabase: {e}")

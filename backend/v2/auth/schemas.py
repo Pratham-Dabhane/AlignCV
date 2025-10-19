@@ -40,7 +40,7 @@ class RefreshTokenRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """User information response."""
-    id: int
+    id: str  # UUID from Supabase
     name: str
     email: str
     google_id: Optional[str] = None

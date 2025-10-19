@@ -13,10 +13,11 @@ from sqlalchemy import select, and_
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from ..database import get_db
+from ..database import get_db, get_supabase_client
 from ..models.models import User, Document, Job, JobBookmark, JobApplication
 from ..config import get_settings, Settings
 from ..auth.utils import decode_token
+from supabase import Client
 from .embedding_utils import get_resume_embedding, get_job_embedding, get_batch_embeddings
 from .vector_store import (
     create_collection,
@@ -95,10 +96,10 @@ class IngestJobsResponse(BaseModel):
 # Dependencies
 # ========================================
 
-async def get_current_user(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> User:
+    db: Client = Depends(get_supabase_client)
+):
     """Get current authenticated user from JWT token."""
     try:
         token = credentials.credentials
@@ -110,16 +111,15 @@ async def get_current_user(
                 detail="Invalid token payload"
             )
         
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
+        result = db.table('users').select('*').eq('email', email).execute()
         
-        if not user:
+        if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
             )
         
-        return user
+        return result.data[0]
         
     except HTTPException:
         raise
@@ -138,8 +138,8 @@ async def get_current_user(
 @router.post("/match", response_model=List[JobMatchResponse])
 async def match_jobs(
     request: JobMatchRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -152,28 +152,33 @@ async def match_jobs(
     4. Rank by combined score (vector + skill match)
     5. Return enriched job matches
     """
-    logger.info(f"Job match request - User: {current_user.email}, Resume: {request.resume_id}")
+    logger.info(f"Job match request - User: {current_user['email']}, Resume: {request.resume_id}")
     
     # Fetch resume document
-    result = await db.execute(
-        select(Document).where(
-            and_(
-                Document.id == request.resume_id,
-                Document.user_id == current_user.id
-            )
-        )
-    )
-    document = result.scalar_one_or_none()
+    result = db.table('documents').select('*').eq('id', request.resume_id).eq('user_id', current_user['id']).execute()
     
-    if not document:
+    if not result.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resume not found"
         )
     
+    document = result.data[0]
+    
+    # Extract text from parsed_content
+    extracted_text = None
+    if document.get('parsed_content'):
+        extracted_text = document['parsed_content'].get('text')
+    
+    if not extracted_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document has no extracted text"
+        )
+    
     # Generate resume embedding
     logger.info("Generating resume embedding...")
-    resume_embedding = await get_resume_embedding(document.extracted_text, settings)
+    resume_embedding = await get_resume_embedding(extracted_text, settings)
     
     # Search for similar jobs in Qdrant
     logger.info(f"Searching for top {request.top_k} matching jobs...")
@@ -190,7 +195,7 @@ async def match_jobs(
     # Rank jobs with skill analysis
     logger.info("Ranking jobs with skill analysis...")
     ranked_jobs = await rank_jobs(
-        resume_text=document.extracted_text,
+        resume_text=extracted_text,
         job_matches=job_matches,
         settings=settings
     )
@@ -209,40 +214,33 @@ async def match_jobs(
     # Limit to requested top_k
     ranked_jobs = ranked_jobs[:request.top_k]
     
-    # Check bookmarks and applications
-    job_ids_in_db = [j["job_id"] for j in ranked_jobs]
-    result = await db.execute(
-        select(Job).where(Job.job_id.in_(job_ids_in_db))
-    )
-    jobs_in_db = result.scalars().all()
-    job_id_to_db_id = {j.job_id: j.id for j in jobs_in_db}
+    # Check bookmarks and applications (tables might not exist yet)
+    try:
+        bookmarks_result = db.table('bookmarks').select('job_id').eq('user_id', current_user['id']).execute()
+        bookmarks = {b['job_id'] for b in bookmarks_result.data} if bookmarks_result.data else set()
+    except:
+        bookmarks = set()
     
-    # Get user's bookmarks and applications
-    result = await db.execute(
-        select(JobBookmark).where(JobBookmark.user_id == current_user.id)
-    )
-    bookmarks = {b.job_id for b in result.scalars().all()}
-    
-    result = await db.execute(
-        select(JobApplication).where(JobApplication.user_id == current_user.id)
-    )
-    applications = {a.job_id for a in result.scalars().all()}
+    try:
+        applications_result = db.table('applications').select('job_id').eq('user_id', current_user['id']).execute()
+        applications = {a['job_id'] for a in applications_result.data} if applications_result.data else set()
+    except:
+        applications = set()
     
     # Enrich with bookmark/application status
     for job in ranked_jobs:
-        db_job_id = job_id_to_db_id.get(job["job_id"])
-        if db_job_id:
-            job["is_bookmarked"] = db_job_id in bookmarks
-            job["is_applied"] = db_job_id in applications
+        job_id = job.get("job_id")
+        job["is_bookmarked"] = job_id in bookmarks
+        job["is_applied"] = job_id in applications
     
     logger.info(f"Returning {len(ranked_jobs)} matched jobs")
     return ranked_jobs
 
 
 @router.post("/ingest", response_model=IngestJobsResponse)
-async def ingest_jobs(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+async def ingest_jobs_endpoint(
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -250,7 +248,7 @@ async def ingest_jobs(
     
     Admin endpoint to populate job database.
     """
-    logger.info(f"Job ingestion started by user: {current_user.email}")
+    logger.info(f"Job ingestion started by user: {current_user['email']}")
     
     # Ensure collection exists
     await create_collection(settings)
@@ -270,25 +268,20 @@ async def ingest_jobs(
     
     for job_data in jobs_data:
         # Check if job already exists
-        result = await db.execute(
-            select(Job).where(Job.job_id == job_data["job_id"])
-        )
-        existing_job = result.scalar_one_or_none()
+        result = db.table('jobs').select('*').eq('job_id', job_data["job_id"]).execute()
         
-        if existing_job:
+        if result.data:
             # Update existing job
-            for key, value in job_data.items():
-                if key != "job_id":
-                    setattr(existing_job, key, value)
+            job_data['updated_at'] = datetime.utcnow().isoformat()
+            db.table('jobs').update(job_data).eq('job_id', job_data["job_id"]).execute()
             updated_jobs += 1
-            job_model = existing_job
+            job_id_str = result.data[0]['id']
         else:
             # Create new job
-            job_model = Job(**job_data)
-            db.add(job_model)
+            job_data['created_at'] = datetime.utcnow().isoformat()
+            insert_result = db.table('jobs').insert(job_data).execute()
             new_jobs += 1
-        
-        await db.flush()
+            job_id_str = insert_result.data[0]['id']
         
         # Generate embedding for job description
         job_embedding = await get_job_embedding(job_data["description"], settings)
@@ -313,10 +306,8 @@ async def ingest_jobs(
         )
         
         # Update vector_id in database
-        job_model.vector_id = job_data["job_id"]
+        db.table('jobs').update({'vector_id': job_data["job_id"]}).eq('id', job_id_str).execute()
         embeddings_created += 1
-    
-    await db.commit()
     
     logger.info(f"Job ingestion complete - New: {new_jobs}, Updated: {updated_jobs}, Embeddings: {embeddings_created}")
     
@@ -329,239 +320,226 @@ async def ingest_jobs(
 
 
 @router.get("/", response_model=List[Dict])
-async def get_jobs(
+def get_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     source: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Get list of jobs with pagination."""
-    query = select(Job)
-    
-    if source:
-        query = query.where(Job.source == source)
-    
-    query = query.order_by(Job.created_at.desc()).offset(skip).limit(limit)
-    
-    result = await db.execute(query)
-    jobs = result.scalars().all()
-    
-    return [
-        {
-            "id": job.id,
-            "job_id": job.job_id,
-            "title": job.title,
-            "company": job.company,
-            "location": job.location,
-            "url": job.url,
-            "tags": job.tags,
-            "salary_min": job.salary_min,
-            "salary_max": job.salary_max,
-            "employment_type": job.employment_type,
-            "experience_level": job.experience_level,
-            "created_at": job.created_at.isoformat()
-        }
-        for job in jobs
-    ]
+    try:
+        query = db.table('jobs').select('*')
+        
+        if source:
+            query = query.eq('source', source)
+        
+        result = query.order('created_at', desc=True).range(skip, skip + limit - 1).execute()
+        jobs = result.data if result.data else []
+        
+        return [
+            {
+                "id": job['id'],
+                "job_id": job['job_id'],
+                "title": job['title'],
+                "company": job['company'],
+                "location": job.get('location'),
+                "url": job.get('url'),
+                "tags": job.get('tags', []),
+                "salary_min": job.get('salary_min'),
+                "salary_max": job.get('salary_max'),
+                "employment_type": job.get('employment_type'),
+                "experience_level": job.get('experience_level'),
+                "created_at": job['created_at']
+            }
+            for job in jobs
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching jobs: {e}")
+        return []
 
 
 @router.post("/bookmark")
-async def bookmark_job(
+def bookmark_job(
     request: BookmarkRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Bookmark a job for later review."""
-    # Check if job exists
-    result = await db.execute(select(Job).where(Job.id == request.job_id))
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
-        )
-    
-    # Check if already bookmarked
-    result = await db.execute(
-        select(JobBookmark).where(
-            and_(
-                JobBookmark.user_id == current_user.id,
-                JobBookmark.job_id == request.job_id
+    try:
+        # Check if job exists (by job_id string, not UUID)
+        job_result = db.table('jobs').select('*').eq('job_id', request.job_id).execute()
+        
+        if not job_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
             )
-        )
-    )
-    existing = result.scalar_one_or_none()
-    
-    if existing:
+        
+        job = job_result.data[0]
+        
+        # Check if already bookmarked
+        existing = db.table('bookmarks').select('*').eq('user_id', current_user['id']).eq('job_id', request.job_id).execute()
+        
+        if existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Job already bookmarked"
+            )
+        
+        # Create bookmark with job details
+        bookmark_data = {
+            'user_id': current_user['id'],
+            'job_id': request.job_id,
+            'title': job['title'],
+            'company': job['company'],
+            'location': job.get('location'),
+            'description': job.get('description'),
+            'source_url': job.get('url'),
+            'notes': request.notes
+        }
+        result = db.table('bookmarks').insert(bookmark_data).execute()
+        
+        logger.info(f"Job bookmarked - User: {current_user['id']}, Job: {request.job_id}")
+        
+        return {"message": "Job bookmarked successfully", "bookmark_id": result.data[0]['id']}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bookmarking job: {e}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Job already bookmarked"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to bookmark job"
         )
-    
-    # Create bookmark
-    bookmark = JobBookmark(
-        user_id=current_user.id,
-        job_id=request.job_id,
-        notes=request.notes
-    )
-    db.add(bookmark)
-    await db.commit()
-    
-    logger.info(f"Job bookmarked - User: {current_user.id}, Job: {request.job_id}")
-    
-    return {"message": "Job bookmarked successfully", "bookmark_id": bookmark.id}
 
 
 @router.delete("/bookmark/{job_id}")
-async def remove_bookmark(
-    job_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def remove_bookmark(
+    job_id: str,
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Remove bookmark from a job."""
-    result = await db.execute(
-        select(JobBookmark).where(
-            and_(
-                JobBookmark.user_id == current_user.id,
-                JobBookmark.job_id == job_id
+    try:
+        result = db.table('bookmarks').select('*').eq('user_id', current_user['id']).eq('job_id', job_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bookmark not found"
             )
-        )
-    )
-    bookmark = result.scalar_one_or_none()
-    
-    if not bookmark:
+        
+        db.table('bookmarks').delete().eq('user_id', current_user['id']).eq('job_id', job_id).execute()
+        
+        logger.info(f"Bookmark removed - User: {current_user['id']}, Job: {job_id}")
+        
+        return {"message": "Bookmark removed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing bookmark: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bookmark not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove bookmark"
         )
-    
-    await db.delete(bookmark)
-    await db.commit()
-    
-    logger.info(f"Bookmark removed - User: {current_user.id}, Job: {job_id}")
-    
-    return {"message": "Bookmark removed successfully"}
 
 
 @router.get("/bookmarks")
-async def get_bookmarks(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def get_bookmarks(
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Get user's bookmarked jobs."""
-    result = await db.execute(
-        select(JobBookmark).where(JobBookmark.user_id == current_user.id)
-    )
-    bookmarks = result.scalars().all()
-    
-    # Fetch job details
-    job_ids = [b.job_id for b in bookmarks]
-    result = await db.execute(select(Job).where(Job.id.in_(job_ids)))
-    jobs = {j.id: j for j in result.scalars().all()}
-    
-    return [
-        {
-            "bookmark_id": b.id,
-            "job": {
-                "id": jobs[b.job_id].id,
-                "title": jobs[b.job_id].title,
-                "company": jobs[b.job_id].company,
-                "url": jobs[b.job_id].url,
-            },
-            "notes": b.notes,
-            "created_at": b.created_at.isoformat()
-        }
-        for b in bookmarks
-        if b.job_id in jobs
-    ]
+    try:
+        result = db.table('bookmarks').select('*').eq('user_id', current_user['id']).execute()
+        bookmarks = result.data
+        
+        return bookmarks
+    except Exception as e:
+        logger.error(f"Error fetching bookmarks: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch bookmarks"
+        )
 
 
 @router.post("/apply")
-async def apply_to_job(
+def apply_to_job(
     request: ApplicationRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Mark a job as applied."""
-    # Check if job exists
-    result = await db.execute(select(Job).where(Job.id == request.job_id))
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
-        )
-    
-    # Check if already applied
-    result = await db.execute(
-        select(JobApplication).where(
-            and_(
-                JobApplication.user_id == current_user.id,
-                JobApplication.job_id == request.job_id
+    try:
+        # Check if job exists
+        job_result = db.table('jobs').select('*').eq('job_id', request.job_id).execute()
+        
+        if not job_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
             )
+        
+        job = job_result.data[0]
+        
+        # Check if already applied
+        existing = db.table('applications').select('*').eq('user_id', current_user['id']).eq('job_id', request.job_id).execute()
+        
+        if existing.data:
+            # Update existing application
+            update_data = {
+                'status': request.status,
+                'notes': request.notes,
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            db.table('applications').update(update_data).eq('user_id', current_user['id']).eq('job_id', request.job_id).execute()
+            return {"message": "Application updated successfully", "application_id": existing.data[0]['id']}
+        
+        # Create application with job details
+        application_data = {
+            'user_id': current_user['id'],
+            'job_id': request.job_id,
+            'title': job['title'],
+            'company': job['company'],
+            'location': job.get('location'),
+            'description': job.get('description'),
+            'source_url': job.get('url'),
+            'status': request.status,
+            'notes': request.notes,
+            'applied_date': datetime.utcnow().date().isoformat()
+        }
+        result = db.table('applications').insert(application_data).execute()
+        
+        logger.info(f"Job application created - User: {current_user['id']}, Job: {request.job_id}")
+        
+        return {"message": "Job application recorded successfully", "application_id": result.data[0]['id']}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error applying to job: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record job application"
         )
-    )
-    existing = result.scalar_one_or_none()
-    
-    if existing:
-        # Update existing application
-        existing.status = request.status
-        existing.notes = request.notes
-        existing.updated_at = datetime.utcnow()
-        await db.commit()
-        return {"message": "Application updated successfully", "application_id": existing.id}
-    
-    # Create application
-    application = JobApplication(
-        user_id=current_user.id,
-        job_id=request.job_id,
-        status=request.status,
-        notes=request.notes
-    )
-    db.add(application)
-    await db.commit()
-    
-    logger.info(f"Job application created - User: {current_user.id}, Job: {request.job_id}")
-    
-    return {"message": "Job application recorded successfully", "application_id": application.id}
 
 
 @router.get("/applications")
-async def get_applications(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def get_applications(
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Get user's job applications."""
-    result = await db.execute(
-        select(JobApplication).where(JobApplication.user_id == current_user.id)
-    )
-    applications = result.scalars().all()
-    
-    # Fetch job details
-    job_ids = [a.job_id for a in applications]
-    result = await db.execute(select(Job).where(Job.id.in_(job_ids)))
-    jobs = {j.id: j for j in result.scalars().all()}
-    
-    return [
-        {
-            "application_id": a.id,
-            "job": {
-                "id": jobs[a.job_id].id,
-                "title": jobs[a.job_id].title,
-                "company": jobs[a.job_id].company,
-                "url": jobs[a.job_id].url,
-            },
-            "status": a.status,
-            "applied_date": a.applied_date.isoformat(),
-            "notes": a.notes,
-            "created_at": a.created_at.isoformat()
-        }
-        for a in applications
-        if a.job_id in jobs
-    ]
+    try:
+        result = db.table('applications').select('*').eq('user_id', current_user['id']).execute()
+        applications = result.data
+        
+        return applications
+    except Exception as e:
+        logger.error(f"Error fetching applications: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch applications"
+        )
 
 
 @router.get("/stats")

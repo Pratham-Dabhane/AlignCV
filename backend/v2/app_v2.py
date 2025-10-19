@@ -11,6 +11,13 @@ Includes:
 V2 routes use /v2 prefix for consistency.
 """
 
+import asyncio
+import sys
+
+# Fix for Windows + psycopg async compatibility
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer

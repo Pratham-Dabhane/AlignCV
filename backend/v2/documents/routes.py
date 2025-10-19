@@ -13,12 +13,10 @@ import os
 import tempfile
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from supabase import Client
 from typing import List, Optional
 
 from ..database import get_db
-from ..models.models import User, Document
 from ..auth.utils import decode_token
 from .parser import parse_document, compute_text_hash, validate_text_content
 from ..nlp.extractor import extract_all
@@ -33,19 +31,19 @@ router = APIRouter(prefix="/v2/documents", tags=["Documents"])
 security = HTTPBearer()
 
 
-async def get_current_user(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> User:
+    db: Client = Depends(get_db)
+):
     """
     Dependency to get current authenticated user from JWT token.
     
     Args:
         credentials: HTTP Bearer credentials with JWT token
-        db: Database session
+        db: Supabase client
         
     Returns:
-        User: Current authenticated user
+        dict: Current authenticated user
         
     Raises:
         HTTPException: 401 if token is invalid or user not found
@@ -59,8 +57,8 @@ async def get_current_user(
             detail="Invalid or expired token"
         )
     
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
+    result = db.table('users').select('*').eq('email', email).execute()
+    user = result.data[0] if result.data else None
     
     if not user:
         raise HTTPException(
@@ -74,24 +72,24 @@ async def get_current_user(
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_db)
 ):
     """
     Upload and parse a PDF or DOCX document.
     
     Args:
         file: Uploaded file (PDF or DOCX)
-        current_user: Authenticated user
-        db: Database session
+        current_user: Authenticated user (dict)
+        db: Supabase client
         
     Returns:
-        Dict with parsed text, skills, roles, and entities
+        Dict with upload status
         
     Raises:
         HTTPException: 400 if file is invalid or too large
     """
-    logger.info(f"Document upload attempt by user {current_user.id}: {file.filename}")
+    logger.info(f"Document upload attempt by user {current_user['id']}: {file.filename}")
     
     # Validate file type
     file_ext = os.path.splitext(file.filename)[1].lower()
@@ -138,35 +136,41 @@ async def upload_document(
         
         # Save file to storage
         storage = get_storage()
-        storage_path = storage.save_file(temp_path, current_user.id, file.filename)
+        storage_path = storage.save_file(temp_path, current_user['id'], file.filename)
         
         # Save to database
-        document = Document(
-            user_id=current_user.id,
-            file_name=file.filename,
-            file_type=file_ext.replace('.', ''),
-            file_size=file_size,
-            storage_url=storage_path,
-            text_hash=text_hash,
-            extracted_text=extracted_text
-        )
+        document_data = {
+            'user_id': current_user['id'],
+            'file_name': file.filename,
+            'file_type': file_ext.replace('.', ''),
+            'file_size': file_size,
+            'file_path': storage_path,
+            'status': 'uploaded',
+            'parsed_content': {
+                'text': extracted_text,
+                'text_hash': text_hash,
+                'skills': nlp_data.get('skills', []),
+                'roles': nlp_data.get('roles', []),
+                'entities': nlp_data.get('entities', {})
+            }
+        }
         
-        db.add(document)
-        await db.commit()
-        await db.refresh(document)
+        result = db.table('documents').insert(document_data).execute()
+        document = result.data[0]
         
-        logger.info(f"Document saved: {document.id} for user {current_user.id}")
+        logger.info(f"✅ Document saved: {document['id']} for user {current_user['id']}")
         
         return {
-            "document_id": document.id,
+            "document_id": document['id'],
+            "message": "Document uploaded and parsed successfully",
             "file_name": file.filename,
+            "storage_path": storage_path,
             "file_size": file_size,
             "text_length": len(extracted_text),
             "parsed_text": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
             "skills": nlp_data.get("skills", []),
             "roles": nlp_data.get("roles", []),
-            "entities": nlp_data.get("entities", {}),
-            "message": "Document uploaded and parsed successfully"
+            "entities": nlp_data.get("entities", {})
         }
         
     finally:
@@ -176,57 +180,48 @@ async def upload_document(
 
 
 @router.get("/")
-async def list_documents(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def list_documents(
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_db)
 ):
     """
     List all documents for current user.
     
     Args:
-        current_user: Authenticated user
-        db: Database session
+        current_user: Authenticated user (dict)
+        db: Supabase client
         
     Returns:
         List of user's documents
     """
-    result = await db.execute(
-        select(Document)
-        .where(Document.user_id == current_user.id)
-        .order_by(Document.created_at.desc())
-    )
-    documents = result.scalars().all()
+    result = db.table('documents').select('*').eq('user_id', current_user['id']).order('created_at', desc=True).execute()
+    documents = result.data
+    
+    # Normalize field names for backwards compatibility
+    for doc in documents:
+        # If document has 'filename', rename it to 'file_name'
+        if 'filename' in doc and 'file_name' not in doc:
+            doc['file_name'] = doc.pop('filename')
     
     return {
-        "documents": [
-            {
-                "id": doc.id,
-                "file_name": doc.file_name,
-                "file_type": doc.file_type,
-                "file_size": doc.file_size,
-                "created_at": doc.created_at.isoformat(),
-                "text_preview": doc.extracted_text[:200] + "..." if len(doc.extracted_text) > 200 else doc.extracted_text,
-                "extracted_text": doc.extracted_text  # Include full text for AI features
-            }
-            for doc in documents
-        ],
+        "documents": documents,
         "total": len(documents)
     }
 
 
 @router.get("/{doc_id}")
-async def get_document(
-    doc_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def get_document(
+    doc_id: str,
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_db)
 ):
     """
     Get specific document details.
     
     Args:
-        doc_id: Document ID
-        current_user: Authenticated user
-        db: Database session
+        doc_id: Document ID (UUID)
+        current_user: Authenticated user (dict)
+        db: Supabase client
         
     Returns:
         Document details with full text
@@ -234,49 +229,36 @@ async def get_document(
     Raises:
         HTTPException: 404 if document not found or doesn't belong to user
     """
-    result = await db.execute(
-        select(Document).where(
-            Document.id == doc_id,
-            Document.user_id == current_user.id
-        )
-    )
-    document = result.scalar_one_or_none()
+    result = db.table('documents').select('*').eq('id', doc_id).eq('user_id', current_user['id']).execute()
     
-    if not document:
+    if not result.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
     
-    # Extract NLP data again for full response
-    nlp_data = extract_all(document.extracted_text)
+    document = result.data[0]
     
-    return {
-        "id": document.id,
-        "file_name": document.file_name,
-        "file_type": document.file_type,
-        "file_size": document.file_size,
-        "created_at": document.created_at.isoformat(),
-        "extracted_text": document.extracted_text,
-        "skills": nlp_data.get("skills", []),
-        "roles": nlp_data.get("roles", []),
-        "entities": nlp_data.get("entities", {})
-    }
+    # Normalize field name for backwards compatibility
+    if 'filename' in document and 'file_name' not in document:
+        document['file_name'] = document.pop('filename')
+    
+    return document
 
 
 @router.delete("/{doc_id}")
-async def delete_document(
-    doc_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def delete_document(
+    doc_id: str,
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_db)
 ):
     """
     Delete document.
     
     Args:
-        doc_id: Document ID
-        current_user: Authenticated user
-        db: Database session
+        doc_id: Document ID (UUID)
+        current_user: Authenticated user (dict)
+        db: Supabase client
         
     Returns:
         Success message
@@ -284,28 +266,26 @@ async def delete_document(
     Raises:
         HTTPException: 404 if document not found or doesn't belong to user
     """
-    result = await db.execute(
-        select(Document).where(
-            Document.id == doc_id,
-            Document.user_id == current_user.id
-        )
-    )
-    document = result.scalar_one_or_none()
+    result = db.table('documents').select('*').eq('id', doc_id).eq('user_id', current_user['id']).execute()
     
-    if not document:
+    if not result.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
     
+    document = result.data[0]
+    
     # Delete file from storage
-    storage = get_storage()
-    storage.delete_file(document.storage_url)
+    try:
+        storage = get_storage()
+        storage.delete_file(document['file_path'])
+    except Exception as e:
+        logger.warning(f"Failed to delete file from storage: {str(e)}")
     
     # Delete from database
-    await db.delete(document)
-    await db.commit()
+    db.table('documents').delete().eq('id', doc_id).execute()
     
-    logger.info(f"Document deleted: {doc_id} by user {current_user.id}")
+    logger.info(f"Document deleted: {doc_id} by user {current_user['id']}")
     
     return {"message": "Document deleted successfully"}

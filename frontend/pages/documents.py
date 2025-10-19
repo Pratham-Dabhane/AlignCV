@@ -551,8 +551,8 @@ def show_ai_rewrite_section():
                         response = requests.post(
                             f"{API_URL}/rewrite/",
                             json={
-                                "resume_text": selected_doc.get('extracted_text', ''),
-                                "style": style
+                                "resume_id": selected_doc.get('id'),
+                                "rewrite_style": style
                             },
                             headers=get_headers(),
                             timeout=60

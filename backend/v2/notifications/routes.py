@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from ..database import get_db
+from ..database import get_db, get_supabase_client
 from ..auth.utils import decode_token
 from ..models.models import User, Notification, NotificationSettings, Job
 from ..config import Settings, get_settings
+from supabase import Client
 from .tasks import send_job_match_email
 
 logger = logging.getLogger(__name__)
@@ -31,10 +32,10 @@ router = APIRouter(prefix="/v2/notifications", tags=["Notifications"])
 # Dependencies
 # ============================================
 
-async def get_current_user(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> User:
+    db: Client = Depends(get_supabase_client)
+):
     """Get current authenticated user from JWT token."""
     try:
         token = credentials.credentials
@@ -46,16 +47,15 @@ async def get_current_user(
                 detail="Invalid token payload"
             )
         
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
+        result = db.table('users').select('*').eq('email', email).execute()
         
-        if not user:
+        if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
         
-        return user
+        return result.data[0]
         
     except HTTPException:
         raise
@@ -82,11 +82,11 @@ class NotificationSettingsSchema(BaseModel):
 
 class NotificationSchema(BaseModel):
     """Notification schema."""
-    id: int
+    id: str  # UUID
     type: str
     title: str
     message: str
-    job_id: Optional[int] = None
+    job_id: Optional[str] = None  # UUID
     match_score: Optional[float] = None
     email_sent: bool
     is_read: bool
@@ -109,9 +109,9 @@ class NotificationListResponse(BaseModel):
 # ============================================
 
 @router.get("/settings", response_model=NotificationSettingsSchema)
-async def get_notification_settings(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def get_notification_settings(
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """
     Get user's notification settings.
@@ -120,31 +120,29 @@ async def get_notification_settings(
     """
     try:
         # Check if settings exist
-        result = await db.execute(
-            select(NotificationSettings).where(NotificationSettings.user_id == current_user.id)
-        )
-        settings = result.scalar_one_or_none()
+        result = db.table('notification_settings').select('*').eq('user_id', current_user['id']).execute()
         
-        if not settings:
+        if not result.data:
             # Create default settings
-            settings = NotificationSettings(
-                user_id=current_user.id,
-                email_enabled=1,
-                digest_frequency="daily",
-                notify_new_matches=1,
-                notify_application_updates=1,
-                min_match_score=0.85
-            )
-            db.add(settings)
-            await db.commit()
-            await db.refresh(settings)
+            new_settings = {
+                'user_id': current_user['id'],
+                'email_enabled': True,
+                'digest_frequency': 'daily',
+                'notify_new_matches': True,
+                'notify_application_updates': True,
+                'min_match_score': 0.85
+            }
+            result = db.table('notification_settings').insert(new_settings).execute()
+            settings = result.data[0]
+        else:
+            settings = result.data[0]
         
         return NotificationSettingsSchema(
-            email_enabled=bool(settings.email_enabled),
-            digest_frequency=settings.digest_frequency,
-            notify_new_matches=bool(settings.notify_new_matches),
-            notify_application_updates=bool(settings.notify_application_updates),
-            min_match_score=settings.min_match_score
+            email_enabled=settings['email_enabled'],
+            digest_frequency=settings['digest_frequency'],
+            notify_new_matches=settings['notify_new_matches'],
+            notify_application_updates=settings['notify_application_updates'],
+            min_match_score=settings['min_match_score']
         )
         
     except Exception as e:
@@ -156,51 +154,41 @@ async def get_notification_settings(
 
 
 @router.put("/settings", response_model=NotificationSettingsSchema)
-async def update_notification_settings(
+def update_notification_settings(
     settings_data: NotificationSettingsSchema,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """
     Update user's notification settings.
     """
     try:
         # Get existing settings
-        result = await db.execute(
-            select(NotificationSettings).where(NotificationSettings.user_id == current_user.id)
-        )
-        settings = result.scalar_one_or_none()
+        result = db.table('notification_settings').select('*').eq('user_id', current_user['id']).execute()
         
-        if settings:
+        update_data = {
+            'email_enabled': settings_data.email_enabled,
+            'digest_frequency': settings_data.digest_frequency,
+            'notify_new_matches': settings_data.notify_new_matches,
+            'notify_application_updates': settings_data.notify_application_updates,
+            'min_match_score': settings_data.min_match_score,
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        if result.data:
             # Update existing settings
-            settings.email_enabled = 1 if settings_data.email_enabled else 0
-            settings.digest_frequency = settings_data.digest_frequency
-            settings.notify_new_matches = 1 if settings_data.notify_new_matches else 0
-            settings.notify_application_updates = 1 if settings_data.notify_application_updates else 0
-            settings.min_match_score = settings_data.min_match_score
-            settings.updated_at = datetime.utcnow()
+            db.table('notification_settings').update(update_data).eq('user_id', current_user['id']).execute()
         else:
             # Create new settings
-            settings = NotificationSettings(
-                user_id=current_user.id,
-                email_enabled=1 if settings_data.email_enabled else 0,
-                digest_frequency=settings_data.digest_frequency,
-                notify_new_matches=1 if settings_data.notify_new_matches else 0,
-                notify_application_updates=1 if settings_data.notify_application_updates else 0,
-                min_match_score=settings_data.min_match_score
-            )
-            db.add(settings)
+            update_data['user_id'] = current_user['id']
+            db.table('notification_settings').insert(update_data).execute()
         
-        await db.commit()
-        await db.refresh(settings)
-        
-        logger.info(f"Updated notification settings for user {current_user.email}")
+        logger.info(f"Updated notification settings for user {current_user['email']}")
         
         return settings_data
         
     except Exception as e:
         logger.error(f"Error updating notification settings: {e}")
-        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update notification settings"
@@ -208,12 +196,12 @@ async def update_notification_settings(
 
 
 @router.get("", response_model=NotificationListResponse)
-async def get_notifications(
+def get_notifications(
     unread_only: bool = False,
     limit: int = 50,
     offset: int = 0,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """
     Get user's notifications.
@@ -225,56 +213,40 @@ async def get_notifications(
     """
     try:
         # Build query
-        query = select(Notification).where(Notification.user_id == current_user.id)
+        query = db.table('notifications').select('*').eq('user_id', current_user['id'])
         
         if unread_only:
-            query = query.where(Notification.is_read == 0)
+            query = query.eq('is_read', False)
         
-        query = query.order_by(Notification.created_at.desc()).limit(limit).offset(offset)
+        # Execute query with ordering and pagination
+        result = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        notifications = result.data if result.data else []
         
-        # Execute query
-        result = await db.execute(query)
-        notifications = result.scalars().all()
+        # Count total
+        total_result = db.table('notifications').select('id', count='exact').eq('user_id', current_user['id']).execute()
+        total = total_result.count if hasattr(total_result, 'count') else len(total_result.data)
         
-        # Count total and unread
-        total_result = await db.execute(
-            select(Notification).where(Notification.user_id == current_user.id)
-        )
-        total = len(total_result.scalars().all())
-        
-        unread_result = await db.execute(
-            select(Notification).where(
-                and_(
-                    Notification.user_id == current_user.id,
-                    Notification.is_read == 0
-                )
-            )
-        )
-        unread = len(unread_result.scalars().all())
+        # Count unread
+        unread_result = db.table('notifications').select('id', count='exact').eq('user_id', current_user['id']).eq('is_read', False).execute()
+        unread = unread_result.count if hasattr(unread_result, 'count') else len(unread_result.data)
         
         # Format response
         notification_list = []
         for notif in notifications:
-            # Get job details if applicable
+            # Get job details if applicable (jobs table doesn't exist yet, so skip)
             job_title = None
             job_company = None
-            if notif.job_id:
-                job_result = await db.execute(select(Job).where(Job.id == notif.job_id))
-                job = job_result.scalar_one_or_none()
-                if job:
-                    job_title = job.title
-                    job_company = job.company
             
             notification_list.append(NotificationSchema(
-                id=notif.id,
-                type=notif.type,
-                title=notif.title,
-                message=notif.message,
-                job_id=notif.job_id,
-                match_score=notif.match_score,
-                email_sent=bool(notif.email_sent),
-                is_read=bool(notif.is_read),
-                created_at=notif.created_at,
+                id=notif['id'],
+                type=notif['type'],
+                title=notif['title'],
+                message=notif['message'],
+                job_id=notif.get('job_id'),
+                match_score=notif.get('match_score'),
+                email_sent=notif.get('email_sent', False),
+                is_read=notif.get('is_read', False),
+                created_at=notif['created_at'],
                 job_title=job_title,
                 job_company=job_company
             ))
@@ -294,34 +266,27 @@ async def get_notifications(
 
 
 @router.put("/{notification_id}/read")
-async def mark_notification_read(
-    notification_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def mark_notification_read(
+    notification_id: str,
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Mark notification as read."""
     try:
         # Get notification
-        result = await db.execute(
-            select(Notification).where(
-                and_(
-                    Notification.id == notification_id,
-                    Notification.user_id == current_user.id
-                )
-            )
-        )
-        notification = result.scalar_one_or_none()
+        result = db.table('notifications').select('*').eq('id', notification_id).eq('user_id', current_user['id']).execute()
         
-        if not notification:
+        if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Notification not found"
             )
         
         # Mark as read
-        notification.is_read = 1
-        notification.read_at = datetime.utcnow()
-        await db.commit()
+        db.table('notifications').update({
+            'is_read': True,
+            'read_at': datetime.utcnow().isoformat()
+        }).eq('id', notification_id).execute()
         
         return {"message": "Notification marked as read"}
         
@@ -329,7 +294,6 @@ async def mark_notification_read(
         raise
     except Exception as e:
         logger.error(f"Error marking notification as read: {e}")
-        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update notification"
@@ -337,9 +301,9 @@ async def mark_notification_read(
 
 
 @router.post("/test")
-async def test_notification(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+def test_notification(
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -348,24 +312,25 @@ async def test_notification(
     Useful for verifying SendGrid configuration.
     """
     try:
-        # Get a sample job
-        result = await db.execute(select(Job).limit(1))
-        sample_job = result.scalar_one_or_none()
+        # Get a sample job (jobs table might not exist yet)
+        result = db.table('jobs').select('*').limit(1).execute()
         
-        if not sample_job:
+        if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No jobs available for test. Ingest jobs first."
             )
         
-        # Queue test email
-        send_job_match_email.delay(current_user.id, [sample_job.id])
+        sample_job = result.data[0]
         
-        logger.info(f"Test notification queued for {current_user.email}")
+        # Queue test email
+        send_job_match_email.delay(current_user['id'], [sample_job['id']])
+        
+        logger.info(f"Test notification queued for {current_user['email']}")
         
         return {
             "message": "Test notification queued successfully",
-            "email": current_user.email,
+            "email": current_user['email'],
             "note": "Check your email inbox (and spam folder) in a few moments"
         }
         
@@ -380,33 +345,24 @@ async def test_notification(
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(
-    notification_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+def delete_notification(
+    notification_id: str,
+    current_user = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
 ):
     """Delete a notification."""
     try:
         # Get notification
-        result = await db.execute(
-            select(Notification).where(
-                and_(
-                    Notification.id == notification_id,
-                    Notification.user_id == current_user.id
-                )
-            )
-        )
-        notification = result.scalar_one_or_none()
+        result = db.table('notifications').select('*').eq('id', notification_id).eq('user_id', current_user['id']).execute()
         
-        if not notification:
+        if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Notification not found"
             )
         
         # Delete notification
-        await db.delete(notification)
-        await db.commit()
+        db.table('notifications').delete().eq('id', notification_id).execute()
         
         return {"message": "Notification deleted successfully"}
         
@@ -414,7 +370,6 @@ async def delete_notification(
         raise
     except Exception as e:
         logger.error(f"Error deleting notification: {e}")
-        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete notification"

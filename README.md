@@ -159,7 +159,7 @@ AlignCV/
 - Python 3.10+
 - FastAPI (Async web framework)
 - SQLAlchemy (ORM with async support)
-- PostgreSQL / SQLite (Database)
+- **Supabase PostgreSQL** (Database - 500MB free) ⭐
 - Pydantic (Data validation)
 - JWT (Authentication)
 
@@ -184,6 +184,11 @@ AlignCV/
 - PyPDF2 (PDF parsing)
 - python-docx (DOCX parsing)
 - SpaCy (NLP extraction)
+
+**File Storage:**
+- **Supabase Storage** (Production - 1GB free, no credit card!) ⭐
+- Local storage (Development fallback)
+- AWS S3 (Enterprise option)
 
 **Testing & Quality:**
 - pytest (Unit & integration tests)
