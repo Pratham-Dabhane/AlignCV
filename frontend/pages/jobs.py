@@ -15,10 +15,11 @@ def get_headers():
 def show_jobs():
     """Show jobs page"""
     st.markdown("## 💼 Job Matching")
-    st.markdown("Find jobs that match your skills")
+    st.markdown("Discover opportunities tailored to your skills and experience")
+    st.markdown("")  # Spacing
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["🔍 Find Jobs", "⭐ Bookmarks", "📊 Applications"])
+    tab1, tab2, tab3 = st.tabs(["🔍 Find Jobs", "⭐ My Bookmarks", "📊 My Applications"])
     
     with tab1:
         show_job_matching()
@@ -32,27 +33,31 @@ def show_jobs():
 def show_job_matching():
     """Show job matching section"""
     st.markdown("### 🔍 Find Matching Jobs")
+    st.markdown("Search for opportunities that align with your profile")
+    st.markdown("")  # Spacing
     
     # Search controls
     col1, col2 = st.columns([3, 1])
     
     with col1:
         search_query = st.text_input(
-            "Search Keywords",
-            placeholder="e.g., Python Developer, Data Scientist",
-            help="Enter job titles or keywords"
+            "🔎 Search Keywords",
+            placeholder="e.g., Python Developer, Data Scientist, Machine Learning",
+            help="Enter job titles, skills, or keywords",
+            label_visibility="collapsed"
         )
     
     with col2:
         min_score = st.slider(
-            "Min Match Score",
+            "Min Match %",
             min_value=0,
             max_value=100,
             value=60,
-            help="Minimum match score percentage"
+            help="Filter jobs by minimum match score"
         )
     
-    if st.button("🔍 Search Jobs", type="primary", use_container_width=True):
+    st.markdown("")  # Spacing
+    if st.button("� Search Jobs", type="primary", use_container_width=True):
         search_jobs(search_query, min_score)
 
 def search_jobs(query, min_score):
@@ -199,6 +204,8 @@ def apply_to_job(job_id):
 def show_bookmarks():
     """Show bookmarked jobs"""
     st.markdown("### ⭐ Your Bookmarked Jobs")
+    st.markdown("Jobs you've saved for later review")
+    st.markdown("")  # Spacing
     
     try:
         response = requests.get(
@@ -269,6 +276,8 @@ def remove_bookmark(bookmark_id):
 def show_applications():
     """Show job applications"""
     st.markdown("### 📊 Your Applications")
+    st.markdown("Track all your submitted job applications")
+    st.markdown("")  # Spacing
     
     try:
         response = requests.get(

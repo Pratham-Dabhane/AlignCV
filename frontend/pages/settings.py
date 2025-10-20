@@ -14,7 +14,8 @@ def get_headers():
 def show_settings():
     """Show settings page"""
     st.markdown("## ⚙️ Settings")
-    st.markdown("Manage your account and preferences")
+    st.markdown("Personalize your AlignCV experience and manage your account")
+    st.markdown("")  # Spacing
     
     # Create tabs
     tab1, tab2, tab3, tab4 = st.tabs(["👤 Profile", "🔐 Security", "🎨 Preferences", "⚠️ Danger Zone"])
@@ -33,8 +34,9 @@ def show_settings():
 
 def show_profile_settings():
     """Show profile settings"""
-    st.markdown("### � Profile Information")
-    st.markdown("Update your personal information")
+    st.markdown("### 👤 Profile Information")
+    st.markdown("Keep your personal details up to date")
+    st.markdown("")  # Spacing
     
     # Get current user data
     user = st.session_state.get('user', {})
@@ -123,7 +125,8 @@ def update_profile(profile_data):
 def show_security_settings():
     """Show security settings"""
     st.markdown("### 🔐 Security")
-    st.markdown("Update your password and security settings")
+    st.markdown("Protect your account with a strong password")
+    st.markdown("")  # Spacing
     
     with st.form("password_form"):
         st.markdown("#### Change Password")
@@ -192,7 +195,8 @@ def change_password(current_password, new_password):
 def show_preference_settings():
     """Show preference settings"""
     st.markdown("### 🎨 Preferences")
-    st.markdown("Customize your AlignCV experience")
+    st.markdown("Customize your job search settings and display options")
+    st.markdown("")  # Spacing
     
     st.markdown("#### 🎯 Job Matching Preferences")
     
@@ -279,9 +283,10 @@ def save_preferences(preferences):
 def show_danger_zone():
     """Show dangerous operations"""
     st.markdown("### ⚠️ Danger Zone")
-    st.markdown("Irreversible actions that affect your account")
+    st.markdown("Handle account data and deletion carefully")
+    st.markdown("")  # Spacing
     
-    st.error("⚠️ **Warning**: These actions cannot be undone!")
+    st.error("⚠️ **Warning**: These actions have permanent consequences and cannot be undone!")
     
     # Export data
     st.markdown("#### 📥 Export Your Data")

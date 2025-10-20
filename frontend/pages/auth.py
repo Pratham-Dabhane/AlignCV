@@ -21,14 +21,15 @@ def show_auth_page():
 
 def show_login():
     """Login form"""
-    st.markdown("### Welcome Back!")
-    st.markdown("Login to access your dashboard")
+    st.markdown("### 👋 Welcome Back!")
+    st.markdown("Sign in to continue your job search journey")
     
     with st.form("login_form"):
-        email = st.text_input("📧 Email", placeholder="you@example.com")
-        password = st.text_input("🔒 Password", type="password", placeholder="••••••••")
+        email = st.text_input("📧 Email", placeholder="you@example.com", help="Enter your registered email")
+        password = st.text_input("🔒 Password", type="password", placeholder="Enter your password", help="Your secure password")
         
-        submit = st.form_submit_button("🚀 Login", use_container_width=True)
+        st.markdown("")  # Spacing
+        submit = st.form_submit_button("🚀 Sign In", use_container_width=True, type="primary")
         
         if submit:
             if not email or not password:
@@ -65,18 +66,19 @@ def show_login():
 
 def show_signup():
     """Signup form"""
-    st.markdown("### Create Your Account")
-    st.markdown("Join AlignCV to start matching with perfect jobs")
+    st.markdown("### ✨ Create Your Account")
+    st.markdown("Join AlignCV and discover your perfect career match")
     
     with st.form("signup_form"):
-        name = st.text_input("👤 Full Name", placeholder="John Doe")
-        email = st.text_input("📧 Email", placeholder="you@example.com")
-        password = st.text_input("🔒 Password", type="password", placeholder="••••••••")
-        password_confirm = st.text_input("🔒 Confirm Password", type="password", placeholder="••••••••")
+        name = st.text_input("👤 Full Name", placeholder="John Doe", help="Your full name as you'd like it to appear")
+        email = st.text_input("📧 Email", placeholder="you@example.com", help="Use a valid email address")
+        password = st.text_input("🔒 Password", type="password", placeholder="Create a strong password", help="Minimum 8 characters")
+        password_confirm = st.text_input("🔒 Confirm Password", type="password", placeholder="Re-enter your password")
         
-        st.markdown("*Password must be at least 8 characters*")
+        st.info("💡 **Tip**: Use a strong password with a mix of letters, numbers, and symbols")
         
-        submit = st.form_submit_button("✨ Create Account", use_container_width=True)
+        st.markdown("")  # Spacing
+        submit = st.form_submit_button("🚀 Create Account", use_container_width=True, type="primary")
         
         if submit:
             # Validation

@@ -15,10 +15,11 @@ def get_headers():
 def show_documents():
     """Show documents page"""
     st.markdown("## 📄 My Documents")
-    st.markdown("Upload and manage your resumes")
+    st.markdown("Upload, manage, and optimize your resumes with AI")
+    st.markdown("")  # Spacing
     
     # Create tabs for different sections
-    tab1, tab2, tab3, tab4 = st.tabs(["📤 Upload", "📂 My Documents", "🎯 Tailor to Job", "✨ AI Rewrite"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📤 Upload New", "📂 My Documents", "🎯 Tailor to Job", "✨ AI Rewrite"])
     
     with tab1:
         show_upload_section()
@@ -34,13 +35,15 @@ def show_documents():
 
 def show_upload_section():
     """Upload resume section"""
-    st.markdown("### Upload Your Resume")
-    st.markdown("Upload your resume in PDF or DOCX format")
+    st.markdown("### 📤 Upload Your Resume")
+    st.markdown("Upload your resume in PDF or DOCX format for AI analysis and optimization")
+    st.markdown("")  # Spacing
     
     uploaded_file = st.file_uploader(
-        "Choose a file",
+        "Drop your file here or click to browse",
         type=['pdf', 'docx'],
-        help="Maximum file size: 5MB"
+        help="Supported formats: PDF, DOCX • Maximum size: 5MB",
+        label_visibility="collapsed"
     )
     
     if uploaded_file:
@@ -108,7 +111,9 @@ def show_upload_section():
 
 def show_documents_list():
     """Show list of uploaded documents"""
-    st.markdown("### Your Uploaded Documents")
+    st.markdown("### 📂 Your Uploaded Documents")
+    st.markdown("View and manage all your resume versions")
+    st.markdown("")  # Spacing
     
     try:
         # Fetch documents from API

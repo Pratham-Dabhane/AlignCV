@@ -15,10 +15,11 @@ def get_headers():
 def show_notifications():
     """Show notifications page"""
     st.markdown("## 🔔 Notifications")
-    st.markdown("Stay updated on your job search")
+    st.markdown("Stay updated with job matches, applications, and important alerts")
+    st.markdown("")  # Spacing
     
     # Create tabs
-    tab1, tab2 = st.tabs(["📬 All Notifications", "⚙️ Settings"])
+    tab1, tab2 = st.tabs(["📬 All Notifications", "⚙️ Preferences"])
     
     with tab1:
         show_notifications_list()
@@ -29,6 +30,8 @@ def show_notifications():
 def show_notifications_list():
     """Show all notifications"""
     st.markdown("### 📬 Your Notifications")
+    st.markdown("Filter and manage all your notifications")
+    st.markdown("")  # Spacing
     
     # Filter controls
     col1, col2, col3 = st.columns([2, 2, 1])
@@ -228,7 +231,8 @@ def delete_notification(notif_id):
 def show_notification_settings():
     """Show notification settings"""
     st.markdown("### ⚙️ Notification Preferences")
-    st.markdown("Control what notifications you receive")
+    st.markdown("Customize your notification settings for the best experience")
+    st.markdown("")  # Spacing
     
     try:
         # Fetch current settings

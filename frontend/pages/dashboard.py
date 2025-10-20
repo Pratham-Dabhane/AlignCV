@@ -19,6 +19,8 @@ def show_dashboard():
     
     st.markdown("## 🏠 Dashboard")
     st.markdown(f"### Welcome back, {st.session_state.user.get('name', 'User')}! 👋")
+    st.markdown("Here's your job search overview")
+    st.markdown("")  # Spacing
     
     # Stats row
     col1, col2, col3, col4 = st.columns(4)
@@ -55,38 +57,42 @@ def show_dashboard():
     
     # Quick Actions
     st.markdown("### 🚀 Quick Actions")
+    st.markdown("Get started with these essential features")
+    st.markdown("")  # Spacing
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📤 Upload Resume", use_container_width=True, type="primary"):
-            st.session_state.current_page = "documents"
+        if st.button("📤 Upload Resume", use_container_width=True, type="primary", help="Upload and optimize your resume"):
+            st.session_state.navigate_to = "📄 Documents"
             st.rerun()
     
     with col2:
-        if st.button("🔍 Find Jobs", use_container_width=True):
-            st.session_state.current_page = "jobs"
+        if st.button("🔍 Find Jobs", use_container_width=True, type="primary", help="Search for matching opportunities"):
+            st.session_state.navigate_to = "💼 Jobs"
             st.rerun()
     
     with col3:
-        if st.button("🔔 Check Notifications", use_container_width=True):
-            st.session_state.current_page = "notifications"
+        if st.button("🔔 Notifications", use_container_width=True, type="primary", help="Check your updates"):
+            st.session_state.navigate_to = "🔔 Notifications"
             st.rerun()
     
     st.markdown("---")
     
     # Recent Activity
     st.markdown("### 📊 Recent Activity")
+    st.markdown("Stay updated with your latest actions")
+    st.markdown("")  # Spacing
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("#### 📄 Recent Documents")
-        st.info("No documents uploaded yet. Start by uploading your resume!")
+        st.info("💡 No documents uploaded yet. Upload your resume to get started!")
     
     with col2:
         st.markdown("#### 🔔 Recent Notifications")
-        st.info("No notifications yet. We'll notify you when we find matching jobs!")
+        st.info("💡 No notifications yet. We'll keep you posted on matching jobs!")
     
     st.markdown("---")
     
