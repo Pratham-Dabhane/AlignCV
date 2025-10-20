@@ -2,16 +2,7 @@
 
 ## ⚡ First Time Setup (IMPORTANT!)
 
-**Before testing, pre-download the model to avoid timeouts:**
-
-```powershell
-# From project root
-python scripts/prewarm_model.py
-```
-
-This downloads the Sentence-BERT model (~80MB) once. Takes 1-2 minutes.
-
-**OR** just be patient on your first test - it will timeout, but the model downloads in background. Try again after 2 minutes.
+The embedding model loads lazily on first use. The first request may take 1–2 minutes to download the model; subsequent requests are fast.
 
 ---
 
@@ -197,10 +188,8 @@ pytest tests/test_api.py::test_analyze_semantic_matching -v
 ### ❌ Common Issues
 
 **Issue: "Request timed out. Please try again."**
-- **Cause:** First run downloads model (~80MB) and may exceed timeout
-- **Solution 1:** Click "Analyze Match" again - model is already downloaded
-- **Solution 2:** Pre-download model: `python scripts/prewarm_model.py`
-- **Solution 3:** Wait patiently - subsequent runs will be fast (1-2 seconds)
+- **Cause:** First run downloads the model and may exceed timeout
+- **Solution:** Retry after a minute — the model finishes downloading in the background; subsequent runs are fast (1–2 seconds)
 
 **Issue: "Cannot connect to backend API"**
 - Solution: Make sure backend is running on port 8000
