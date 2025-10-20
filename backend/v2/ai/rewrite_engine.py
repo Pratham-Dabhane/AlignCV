@@ -1,6 +1,6 @@
 """
-AlignCV V2 - Mistral 7B Rewrite Engine
-Handles resume content rewriting with different styles using Mistral AI.
+AlignCV V2 - LLaMA 3 8B Instruct Rewrite Engine
+Handles resume content rewriting with different styles using Meta's LLaMA 3 8B via Groq.
 """
 
 import logging
@@ -72,7 +72,7 @@ async def rewrite_resume(
     timeout: int = 30
 ) -> Dict[str, any]:
     """
-    Rewrite resume content using Mistral 7B API.
+    Rewrite resume content using LLaMA 3 8B Instruct via Groq API.
     
     Args:
         resume_text: Original resume content
@@ -90,26 +90,26 @@ async def rewrite_resume(
         style = "Technical"
     
     # Check if API key is configured
-    if not settings.mistral_api_key or settings.mistral_api_key == "your-mistral-api-key-here":
-        logger.warning("Mistral API key not configured, using fallback mode")
+    if not settings.groq_api_key or settings.groq_api_key == "your-groq-api-key-here":
+        logger.warning("Groq API key not configured, using fallback mode")
         return _fallback_response(resume_text, style)
     
     try:
         # Prepare the prompt
         prompt = STYLE_PROMPTS[style].format(resume_text=resume_text)
         
-        # Call Mistral API
-        logger.info(f"Calling Mistral API with style: {style}, text length: {len(resume_text)}")
+        # Call Groq API with LLaMA 3 8B
+        logger.info(f"Calling Groq API (LLaMA 3 8B) with style: {style}, text length: {len(resume_text)}")
         
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                "https://api.mistral.ai/v1/chat/completions",
+                "https://api.groq.com/openai/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.mistral_api_key}",
+                    "Authorization": f"Bearer {settings.groq_api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "mistral-small-latest",  # Using mistral-small for cost efficiency
+                    "model": "llama-3.1-8b-instant",  # LLaMA 3.1 8B Instant (latest)
                     "messages": [
                         {
                             "role": "user",
@@ -127,7 +127,7 @@ async def rewrite_resume(
             # Extract the response
             content = result["choices"][0]["message"]["content"]
             
-            # Parse JSON response from Mistral
+            # Parse JSON response from LLaMA
             import json
             try:
                 # Try to parse as JSON
@@ -137,14 +137,14 @@ async def rewrite_resume(
                 impact_score = parsed_result.get("impact_score", 75)
             except json.JSONDecodeError:
                 # If not valid JSON, use content as-is
-                logger.warning("Mistral response not valid JSON, using raw content")
+                logger.warning("LLaMA response not valid JSON, using raw content")
                 rewritten_text = content
                 improvements = ["Content rewritten for better impact"]
                 impact_score = 75
             
             latency = time.time() - start_time
             
-            logger.info(f"Mistral API success - Latency: {latency:.2f}s, Response length: {len(rewritten_text)}")
+            logger.info(f"Groq API success - Latency: {latency:.2f}s, Response length: {len(rewritten_text)}")
             
             return {
                 "rewritten_text": rewritten_text,
@@ -158,26 +158,26 @@ async def rewrite_resume(
             }
             
     except httpx.TimeoutException:
-        logger.error(f"Mistral API timeout after {timeout}s")
+        logger.error(f"Groq API timeout after {timeout}s")
         return _fallback_response(resume_text, style, error="API timeout")
         
     except httpx.HTTPStatusError as e:
-        logger.error(f"Mistral API HTTP error: {e.response.status_code} - {e.response.text}")
+        logger.error(f"Groq API HTTP error: {e.response.status_code} - {e.response.text}")
         return _fallback_response(resume_text, style, error=f"API error: {e.response.status_code}")
         
     except Exception as e:
-        logger.error(f"Mistral API unexpected error: {str(e)}")
+        logger.error(f"Groq API unexpected error: {str(e)}")
         return _fallback_response(resume_text, style, error=str(e))
 
 
 def _fallback_response(resume_text: str, style: str, error: Optional[str] = None) -> Dict[str, any]:
     """
-    Fallback response when Mistral API is unavailable or fails.
+    Fallback response when Groq API is unavailable or fails.
     Returns original text with a warning.
     """
-    warning_msg = "Mistral API unavailable - using original content"
+    warning_msg = "Groq API unavailable - using original content"
     if error:
-        warning_msg = f"Mistral API error ({error}) - using original content"
+        warning_msg = f"Groq API error ({error}) - using original content"
     
     logger.warning(warning_msg)
     
@@ -186,7 +186,7 @@ def _fallback_response(resume_text: str, style: str, error: Optional[str] = None
         "improvements": [
             "API unavailable - original content preserved",
             f"Requested style: {style}",
-            "Please configure MISTRAL_API_KEY for AI rewriting"
+            "Please configure GROQ_API_KEY for AI rewriting"
         ],
         "impact_score": 0,
         "style": style,
@@ -273,8 +273,8 @@ async def tailor_resume_to_job(
         tailoring_level = "moderate"
     
     # Check if API key is configured
-    if not settings.mistral_api_key or settings.mistral_api_key == "your-mistral-api-key-here":
-        logger.warning("Mistral API key not configured, using fallback mode")
+    if not settings.groq_api_key or settings.groq_api_key == "your-groq-api-key-here":
+        logger.warning("Groq API key not configured, using fallback mode")
         return _fallback_tailoring_response(resume_text, job_description, tailoring_level)
     
     try:
@@ -285,13 +285,13 @@ async def tailor_resume_to_job(
         
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                "https://api.mistral.ai/v1/chat/completions",
+                "https://api.groq.com/openai/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.mistral_api_key}",
+                    "Authorization": f"Bearer {settings.groq_api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "mistral-small-latest",
+                    "model": "llama-3.1-8b-instant",  # LLaMA 3.1 8B Instant (latest)
                     "messages": [
                         {
                             "role": "user",
@@ -322,7 +322,7 @@ async def tailor_resume_to_job(
                 priority_improvements = parsed_result.get("priority_improvements", [])
                 
             except json.JSONDecodeError:
-                logger.warning("Mistral response not valid JSON, using raw content as tailored resume")
+                logger.warning("LLaMA response not valid JSON, using raw content as tailored resume")
                 tailored_resume = content
                 missing_skills = []
                 keyword_suggestions = []
@@ -359,7 +359,7 @@ async def tailor_resume_to_job(
         return _fallback_tailoring_response(resume_text, job_description, tailoring_level, error=f"API error: {e.response.status_code}")
         
     except Exception as e:
-        logger.error(f"Mistral API unexpected error: {str(e)}")
+        logger.error(f"Groq API unexpected error: {str(e)}")
         return _fallback_tailoring_response(resume_text, job_description, tailoring_level, error=str(e))
 
 
@@ -454,14 +454,14 @@ def _fallback_tailoring_response(
         "original_resume": resume_text,
         "job_description": job_description,
         "match_score": 0,
-        "missing_skills": missing if missing else ["Configure MISTRAL_API_KEY for detailed analysis"],
+        "missing_skills": missing if missing else ["Configure GROQ_API_KEY for detailed analysis"],
         "keyword_suggestions": [
             "API unavailable - manual tailoring recommended",
             f"Requested tailoring level: {tailoring_level}",
-            "Please configure MISTRAL_API_KEY for AI-powered tailoring"
+            "Please configure GROQ_API_KEY for AI-powered tailoring"
         ],
         "changes_made": ["No changes - API unavailable"],
-        "priority_improvements": ["Configure Mistral API for AI-powered resume tailoring"],
+        "priority_improvements": ["Configure Groq API for AI-powered resume tailoring"],
         "tailoring_level": tailoring_level,
         "latency": 0,
         "original_length": len(resume_text),

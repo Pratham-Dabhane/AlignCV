@@ -76,14 +76,17 @@ def show_notifications_list():
         )
         
         if response.status_code == 200:
-            notifications = response.json()
+            data = response.json()
+            
+            # Extract notifications list from response object
+            notifications = data.get('notifications', []) if isinstance(data, dict) else []
+            total = data.get('total', 0) if isinstance(data, dict) else 0
+            unread_count = data.get('unread', 0) if isinstance(data, dict) else 0
             
             if not notifications or len(notifications) == 0:
-                st.info("� No notifications found. We'll notify you when something important happens!")
+                st.info("📭 No notifications found. We'll notify you when something important happens!")
             else:
-                # Count unread
-                unread_count = sum(1 for n in notifications if not n.get('is_read', False))
-                st.success(f"📬 {len(notifications)} notification(s) ({unread_count} unread)")
+                st.success(f"📬 {total} notification(s) ({unread_count} unread)")
                 
                 # Display notifications
                 for notif in notifications:

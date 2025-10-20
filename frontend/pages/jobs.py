@@ -141,12 +141,12 @@ def display_job_card(job):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("⭐ Bookmark", key=f"bookmark_{job.get('id')}", use_container_width=True):
-                bookmark_job(job.get('id'))
+            if st.button("⭐ Bookmark", key=f"bookmark_{job.get('job_id')}", use_container_width=True):
+                bookmark_job(job.get('job_id'))
         
         with col2:
-            if st.button("✅ Apply", key=f"apply_{job.get('id')}", use_container_width=True, type="primary"):
-                apply_to_job(job.get('id'))
+            if st.button("✅ Apply", key=f"apply_{job.get('job_id')}", use_container_width=True, type="primary"):
+                apply_to_job(job.get('job_id'))
         
         with col3:
             job_url = job.get('url', '')

@@ -13,7 +13,7 @@
 
 ### 🎯 Core Features (V2.0)
 ✨ **AI Resume Tailoring** - Paste a job description and get a customized resume optimized for that specific role  
-🤖 **Intelligent Rewriting** - Mistral AI-powered resume optimization with multiple style options  
+🤖 **Intelligent Rewriting** - LLaMA 3.1 8B via Groq-powered resume optimization with multiple style options  
 📊 **Smart Job Matching** - Vector-based semantic search with Qdrant for finding perfect job matches  
 🔐 **User Authentication** - Secure JWT-based authentication with Google OAuth support  
 � **Document Management** - Upload, parse, and manage multiple resumes (PDF/DOCX)  
@@ -27,9 +27,9 @@
 
 ### Prerequisites
 - Python 3.10+
-- Redis (for background tasks)
+- Redis (optional, for background tasks)
 - Qdrant (local or cloud)
-- Mistral API key (for AI features)
+- Groq API key (for AI features) — free: https://console.groq.com/
 
 ### Installation
 
@@ -51,46 +51,43 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Set up environment variables
-# Create .env file with:
-MISTRAL_API_KEY=your_mistral_api_key
-QDRANT_URL=http://localhost:6333
-REDIS_URL=redis://localhost:6379
-SECRET_KEY=your_secret_key_here
+# Copy .env.example to .env and fill the values
+# Minimal required for local run:
+# - SUPABASE_URL, SUPABASE_ANON_KEY
+# - GROQ_API_KEY (for AI rewrite)
+# Optional: QDRANT_URL, REDIS_URL
 ```
 
 ### Start the Application
 
 **Option 1: Using Helper Scripts (Recommended)**
 ```bash
-# Terminal 1: Start backend V2 API (port 8001)
-python start_server.py
+# Terminal 1: Start backend V2 API (port 8000)
+python -m backend.v2.app_v2
 
-# Terminal 2: Start frontend (port 8502)
-cd frontend
-streamlit run app_v2.py --server.port 8502
+# Terminal 2: Start frontend (port 8501)
+streamlit run frontend/app_v2.py --server.port 8501
 
-# Terminal 3: Start Celery worker (background tasks)
-python start_celery.py
+# Terminal 3 (optional): Start Celery worker (background tasks)
+# celery -A backend.v2.celery_app worker --loglevel=info --pool=solo
 ```
 
 **Option 2: Manual Start**
 ```bash
 # Terminal 1: Backend V2
-cd backend
-uvicorn v2.app_v2:app --reload --port 8001
+uvicorn backend.v2.app_v2:app --reload --port 8000
 
 # Terminal 2: Frontend
-cd frontend
-streamlit run app_v2.py --server.port 8502
+streamlit run frontend/app_v2.py --server.port 8501
 
-# Terminal 3: Celery
-celery -A backend.v2.celery_app worker --loglevel=info --pool=solo
+# Terminal 3: Celery (optional)
+# celery -A backend.v2.celery_app worker --loglevel=info --pool=solo
 ```
 
 **Access the app:**
-- Frontend: `http://localhost:8502`
-- Backend V2 API: `http://localhost:8001`
-- API Docs: `http://localhost:8001/docs`
+- Frontend: `http://localhost:8501`
+- Backend V2 API: `http://localhost:8000`
+- API Docs: `http://localhost:8000/docs`
 - Legacy V1 API: `http://localhost:8000` (optional)
 
 ## 📁 Project Structure
@@ -157,14 +154,13 @@ AlignCV/
 
 **Backend:**
 - Python 3.10+
-- FastAPI (Async web framework)
-- SQLAlchemy (ORM with async support)
-- **Supabase PostgreSQL** (Database - 500MB free) ⭐
-- Pydantic (Data validation)
-- JWT (Authentication)
+- FastAPI (web framework)
+- **Supabase PostgreSQL** via Supabase Python client (database + storage) ⭐
+- Pydantic (data validation)
+- JWT (authentication)
 
 **AI & ML:**
-- Mistral AI (Resume rewriting & tailoring) ⭐
+- LLaMA 3.1 8B Instant via Groq API (Resume rewriting & tailoring) ⭐
 - Sentence-Transformers (Semantic embeddings)
 - BGE Embeddings (`bge-small-en-v1.5`)
 - Qdrant (Vector database for job matching)
@@ -197,7 +193,7 @@ AlignCV/
 
 **Cost:** 
 - Local features: Free
-- AI features: Requires Mistral API key (affordable, ~$0.001 per request)
+- AI features: Free via Groq API (generous free tier)
 - Optional: Qdrant Cloud, SendGrid for production
 
 ## 📋 Development Phases
@@ -265,8 +261,8 @@ See [BUGFIXES_SUMMARY.md](BUGFIXES_SUMMARY.md) for complete bug fix details.
 
 #### 4. **AI Resume Rewriting**
 - Select resume and writing style
-- Mistral AI optimizes content
-- Multiple style options (Technical/Management/Creative/Sales)
+- LLaMA 3.1 (via Groq) optimizes content
+- Multiple style options (Technical/Management/Creative)
 - Track version history
 
 #### 5. **Smart Job Matching**
@@ -309,11 +305,11 @@ Downloadable markdown file with checkbox items and next steps
 
 ## 🔒 Privacy & Security
 
-- ✅ **No Data Storage:** Resume text is never saved
-- ✅ **Local Processing:** All analysis happens on your machine
-- ✅ **No External APIs:** No third-party services involved
+- ✅ **User Isolation:** Row Level Security (RLS) on Supabase tables
+- ✅ **Minimal External Calls:** AI rewriting uses Groq API; no PII beyond resume text is sent
 - ✅ **Open Source:** Fully auditable code
 - ✅ **No Tracking:** No analytics or user tracking
+- ✅ **Configurable:** Disable AI calls by omitting GROQ_API_KEY (fallback mode returns original content)
 
 ## 🧪 Testing
 

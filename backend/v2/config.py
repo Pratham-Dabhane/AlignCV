@@ -47,8 +47,12 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "aligncv-resumes"
     
     # ========================================
-    # Mistral AI
+    # AI Models - LLaMA 3.1 via Groq
     # ========================================
+    groq_api_key: Optional[str] = None
+    groq_model: str = "llama-3.1-8b-instant"  # LLaMA 3.1 8B Instant (latest)
+    
+    # Legacy Mistral support (deprecated, use Groq instead)
     mistral_api_key: Optional[str] = None
     mistral_model: str = "mistral-small-latest"
     
