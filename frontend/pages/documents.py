@@ -331,6 +331,10 @@ We're looking for an experienced Python developer with...
                             if response.status_code == 200:
                                 data = response.json()
                                 
+                                # Check if API is in fallback mode
+                                if data.get('api_status') == 'fallback' or data.get('warning'):
+                                    st.warning(f"⚠️ {data.get('warning', 'API is in fallback mode - limited functionality')}")
+                                
                                 st.success("✅ Resume tailored successfully!")
                                 st.balloons()
                                 
@@ -338,102 +342,196 @@ We're looking for an experienced Python developer with...
                                 st.markdown("---")
                                 st.markdown("## 📊 Tailoring Results")
                                 
-                                # Match score
-                                col1, col2, col3 = st.columns(3)
+                                # Match Score - Large Progress Bar with Color Coding
+                                match_score = data.get('match_score', 0)
+                                
+                                # Determine color based on score
+                                if match_score >= 80:
+                                    bar_color = "#10B981"  # Green
+                                    text_color = "#059669"
+                                    emoji = "🟢"
+                                elif match_score >= 60:
+                                    bar_color = "#F59E0B"  # Yellow/Amber
+                                    text_color = "#D97706"
+                                    emoji = "🟡"
+                                else:
+                                    bar_color = "#EF4444"  # Red
+                                    text_color = "#DC2626"
+                                    emoji = "🔴"
+                                
+                                st.markdown(f"""
+                                <div style="padding: 1.5rem; background: white; border-radius: 1rem; box-shadow: 0 4px 16px rgba(0,0,0,0.06); margin-bottom: 1.5rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                        <h3 style="margin: 0; color: #1F2937;">Match Score</h3>
+                                        <h2 style="margin: 0; color: {text_color};">{emoji} {match_score}%</h2>
+                                    </div>
+                                    <div style="width: 100%; background: #E5E7EB; border-radius: 1rem; height: 2rem; overflow: hidden;">
+                                        <div style="width: {match_score}%; background: {bar_color}; height: 100%; border-radius: 1rem; transition: width 1s ease;"></div>
+                                    </div>
+                                    <p style="margin-top: 0.5rem; margin-bottom: 0; color: #6B7280; font-size: 0.875rem;">
+                                        How well your tailored resume matches the job requirements
+                                    </p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Quick Stats
+                                col1, col2 = st.columns(2)
                                 
                                 with col1:
-                                    match_score = data.get('match_score', 0)
-                                    color = "🟢" if match_score >= 80 else "🟡" if match_score >= 60 else "🔴"
-                                    st.metric(
-                                        "Match Score",
-                                        f"{color} {match_score}%",
-                                        help="How well your tailored resume matches the job"
-                                    )
-                                
-                                with col2:
                                     st.metric(
                                         "Changes Made",
                                         len(data.get('changes_made', [])),
                                         help="Number of improvements applied"
                                     )
                                 
-                                with col3:
+                                with col2:
                                     st.metric(
                                         "Processing Time",
                                         f"{data.get('latency', 0):.1f}s",
                                         help="AI analysis latency"
                                     )
                                 
-                                # Missing skills
-                                if data.get('missing_skills'):
-                                    st.markdown("### ⚠️ Skills Gap Analysis")
-                                    st.markdown("**Skills mentioned in job but missing from your resume:**")
-                                    skills_html = " ".join([
-                                        f'<span style="background-color: #ffe1e1; color: #c33; padding: 4px 8px; border-radius: 4px; margin: 2px; display: inline-block;">❌ {skill}</span>'
-                                        for skill in data['missing_skills'][:10]
-                                    ])
-                                    st.markdown(skills_html, unsafe_allow_html=True)
-                                    st.caption("💡 Consider adding these skills if you have relevant experience")
+                                # Three-Column Layout for Key Info
+                                st.markdown("---")
                                 
-                                # Priority improvements
+                                col1, col2, col3 = st.columns(3)
+                                
+                                # Missing Skills
+                                with col1:
+                                    st.markdown("#### ⚠️ Missing Skills")
+                                    if data.get('missing_skills'):
+                                        for skill in data['missing_skills'][:5]:
+                                            st.markdown(f"""
+                                            <div style="background: #FEE2E2; color: #991B1B; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem; font-weight: 500;">
+                                                ❌ {skill}
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                        if len(data['missing_skills']) > 5:
+                                            st.caption(f"+ {len(data['missing_skills']) - 5} more skills")
+                                    else:
+                                        st.success("✅ All skills covered!")
+                                
+                                # Changes Made
+                                with col2:
+                                    st.markdown("#### ✅ Changes Made")
+                                    if data.get('changes_made'):
+                                        for change in data['changes_made'][:5]:
+                                            st.markdown(f"""
+                                            <div style="background: #D1FAE5; color: #065F46; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem; font-weight: 500;">
+                                                ✓ {change[:50]}{'...' if len(change) > 50 else ''}
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                        if len(data['changes_made']) > 5:
+                                            st.caption(f"+ {len(data['changes_made']) - 5} more changes")
+                                    else:
+                                        st.info("No changes needed")
+                                
+                                # Keyword Suggestions
+                                with col3:
+                                    st.markdown("#### 💡 Keyword Tips")
+                                    if data.get('keyword_suggestions'):
+                                        for suggestion in data['keyword_suggestions'][:5]:
+                                            st.markdown(f"""
+                                            <div style="background: #DBEAFE; color: #1E40AF; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem; font-weight: 500;">
+                                                💬 {suggestion[:50]}{'...' if len(suggestion) > 50 else ''}
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                        if len(data['keyword_suggestions']) > 5:
+                                            st.caption(f"+ {len(data['keyword_suggestions']) - 5} more tips")
+                                    else:
+                                        st.info("Keywords optimized")
+                                
+                                # Priority Improvements - Full Width Alert Box
                                 if data.get('priority_improvements'):
-                                    st.markdown("### 🎯 Priority Improvements")
+                                    st.markdown("---")
+                                    st.markdown("""
+                                    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+                                        <h4 style="margin: 0 0 0.5rem 0; color: #92400E;">🎯 Priority Improvements</h4>
+                                    </div>
+                                    """, unsafe_allow_html=True)
                                     for i, improvement in enumerate(data['priority_improvements'][:5], 1):
-                                        st.markdown(f"{i}. ✅ {improvement}")
+                                        st.markdown(f"""
+                                        <div style="background: white; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.5rem; border-left: 3px solid #F59E0B;">
+                                            <strong>{i}.</strong> {improvement}
+                                        </div>
+                                        """, unsafe_allow_html=True)
                                 
-                                # Keyword suggestions
-                                if data.get('keyword_suggestions'):
-                                    with st.expander("💡 Keyword Suggestions", expanded=False):
-                                        for suggestion in data['keyword_suggestions']:
-                                            st.markdown(f"- 💬 {suggestion}")
-                                
-                                # Changes made
-                                if data.get('changes_made'):
-                                    with st.expander("📝 Detailed Changes", expanded=False):
-                                        for change in data['changes_made']:
-                                            st.markdown(f"- ✏️ {change}")
                                 
                                 # Side-by-side comparison
                                 st.markdown("---")
-                                st.markdown("### 📋 Before & After Comparison")
+                                st.markdown("### 📋 Tailored Resume")
                                 
-                                col1, col2 = st.columns(2)
+                                # Show tailored resume in text area
+                                st.text_area(
+                                    "Your Optimized Resume",
+                                    data.get('tailored_resume', ''),
+                                    height=400,
+                                    key="tailored_resume_display",
+                                    help="Copy this text or download below"
+                                )
                                 
-                                with col1:
-                                    st.markdown("#### 📄 Original Resume")
-                                    st.text_area(
-                                        "Original",
-                                        data.get('original_resume', ''),
-                                        height=400,
-                                        key="original_comparison",
-                                        disabled=True
-                                    )
-                                
-                                with col2:
-                                    st.markdown("#### ✨ Tailored Resume")
-                                    st.text_area(
-                                        "Tailored",
-                                        data.get('tailored_resume', ''),
-                                        height=400,
-                                        key="tailored_comparison"
-                                    )
-                                
-                                # Download options
-                                st.markdown("---")
-                                
+                                # Action buttons
                                 col1, col2 = st.columns(2)
                                 
                                 with col1:
                                     st.download_button(
-                                        label="📥 Download Tailored Resume (TXT)",
+                                        label="📥 Download Tailored Resume",
                                         data=data.get('tailored_resume', ''),
                                         file_name=f"tailored_{selected_doc_name}.txt",
                                         mime="text/plain",
-                                        use_container_width=True
+                                        use_container_width=True,
+                                        type="primary"
                                     )
                                 
                                 with col2:
-                                    # Download analysis report
+                                    if st.button("📋 Copy to Clipboard", use_container_width=True):
+                                        st.info("💡 Use Ctrl+A then Ctrl+C in the text area above to copy")
+                                
+                                # Expanders for detailed comparison and full lists
+                                st.markdown("---")
+                                
+                                with st.expander("📊 View Before & After Comparison", expanded=False):
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        st.markdown("#### 📄 Original Resume")
+                                        st.text_area(
+                                            "Original",
+                                            data.get('original_resume', ''),
+                                            height=400,
+                                            key="original_comparison",
+                                            disabled=True
+                                        )
+                                    
+                                    with col2:
+                                        st.markdown("#### ✨ Tailored Resume")
+                                        st.text_area(
+                                            "Tailored",
+                                            data.get('tailored_resume', ''),
+                                            height=400,
+                                            key="tailored_comparison"
+                                        )
+                                
+                                # Full lists in expanders
+                                if len(data.get('missing_skills', [])) > 5 or len(data.get('changes_made', [])) > 5 or len(data.get('keyword_suggestions', [])) > 5:
+                                    with st.expander("📝 View All Details", expanded=False):
+                                        if len(data.get('missing_skills', [])) > 5:
+                                            st.markdown("#### All Missing Skills")
+                                            for skill in data['missing_skills']:
+                                                st.markdown(f"- ❌ {skill}")
+                                        
+                                        if len(data.get('changes_made', [])) > 5:
+                                            st.markdown("#### All Changes Made")
+                                            for change in data['changes_made']:
+                                                st.markdown(f"- ✓ {change}")
+                                        
+                                        if len(data.get('keyword_suggestions', [])) > 5:
+                                            st.markdown("#### All Keyword Suggestions")
+                                            for suggestion in data['keyword_suggestions']:
+                                                st.markdown(f"- 💬 {suggestion}")
+                                
+                                # Download analysis report
+                                with st.expander("📊 Download Full Analysis Report", expanded=False):
                                     report = f"""RESUME TAILORING REPORT
 {'='*50}
 
@@ -443,7 +541,7 @@ Match Score: {match_score}%
 Processing Time: {data.get('latency', 0):.2f}s
 
 MISSING SKILLS:
-{chr(10).join(f'- {skill}' for skill in data.get('missing_skills', [])[:10])}
+{chr(10).join(f'- {skill}' for skill in data.get('missing_skills', []))}
 
 PRIORITY IMPROVEMENTS:
 {chr(10).join(f'{i}. {imp}' for i, imp in enumerate(data.get('priority_improvements', []), 1))}
@@ -455,7 +553,7 @@ KEYWORD SUGGESTIONS:
 {chr(10).join(f'- {sug}' for sug in data.get('keyword_suggestions', []))}
 """
                                     st.download_button(
-                                        label="📊 Download Analysis Report",
+                                        label="📊 Download Analysis Report (TXT)",
                                         data=report,
                                         file_name=f"tailoring_report_{selected_doc_name}.txt",
                                         mime="text/plain",

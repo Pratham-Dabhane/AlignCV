@@ -308,21 +308,99 @@ async def tailor_resume_to_job(
             
             # Extract the response
             content = result["choices"][0]["message"]["content"]
+            finish_reason = result["choices"][0].get("finish_reason", "unknown")
             
-            # Parse JSON response
+            # Log raw LLM response for debugging
+            logger.info(f"LLM raw response (first 500 chars): {content[:500]}")
+            logger.info(f"LLM response length: {len(content)} chars, finish_reason: {finish_reason}")
+            
+            # Check if response was truncated
+            if finish_reason == "length":
+                logger.warning("LLM response was truncated due to max_tokens limit!")
+            
+            # Parse JSON response - handle various formats
             import json
+            import re
+            
+            parsed_result = None
+            
+            # Clean the content first - remove any leading/trailing whitespace or markdown
+            content_cleaned = content.strip()
+            
+            # Remove markdown code blocks if present
+            if content_cleaned.startswith('```'):
+                # Extract content between code blocks
+                code_block_match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', content_cleaned, re.DOTALL)
+                if code_block_match:
+                    content_cleaned = code_block_match.group(1).strip()
+                    logger.info("Removed markdown code block wrapper")
+            
             try:
-                parsed_result = json.loads(content)
+                # Try direct JSON parse on cleaned content
+                parsed_result = json.loads(content_cleaned)
+                logger.info("Successfully parsed JSON response")
                 
+            except json.JSONDecodeError as e:
+                # If we get control character error, try using json.JSONDecoder with strict=False
+                logger.warning(f"Direct JSON parse failed: {e}")
+                
+                # Try with strict=False to allow control characters
+                try:
+                    import json.decoder
+                    decoder = json.decoder.JSONDecoder(strict=False)
+                    parsed_result = decoder.decode(content_cleaned)
+                    logger.info("Successfully parsed JSON with strict=False")
+                except Exception as e2:
+                    logger.warning(f"Strict=False parsing also failed: {e2}")
+                    parsed_result = None
+                except Exception as e2:
+                    logger.warning(f"Strict=False parsing also failed: {e2}")
+                    parsed_result = None
+                
+                # Strategy 2: Try to find JSON object boundaries and fix control characters
+                if parsed_result is None:
+                    logger.warning(f"Attempting to fix control characters in JSON")
+                    # Find the first { and last }
+                    first_brace = content_cleaned.find('{')
+                    last_brace = content_cleaned.rfind('}')
+                    
+                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                        json_candidate = content_cleaned[first_brace:last_brace + 1]
+                        
+                        # Try to fix common control character issues
+                        # Replace actual newlines in string values with \n
+                        # This is a bit hacky but necessary for LLM responses
+                        try:
+                            # Use ast.literal_eval approach - replace control chars
+                            import codecs
+                            # Encode to handle special characters, then decode
+                            json_fixed = json_candidate.encode('unicode_escape').decode('ascii')
+                            # Now decode the escapes properly for JSON
+                            json_fixed = codecs.decode(json_fixed, 'unicode_escape')
+                            
+                            # Try parsing again with strict=False
+                            decoder = json.decoder.JSONDecoder(strict=False)
+                            parsed_result = decoder.decode(json_candidate)
+                            logger.info("Successfully parsed JSON after fixing control characters")
+                        except Exception as e3:
+                            logger.error(f"Failed to parse after fixing control chars: {e3}")
+                            # Log the problematic part
+                            logger.error(f"Problematic JSON (first 1000 chars): {json_candidate[:1000]}")
+                    else:
+                        logger.error("Could not find valid JSON boundaries in response")
+            
+            # Extract fields from parsed result or use defaults
+            if parsed_result:
                 tailored_resume = parsed_result.get("tailored_resume", resume_text)
                 missing_skills = parsed_result.get("missing_skills", [])
                 keyword_suggestions = parsed_result.get("keyword_suggestions", [])
                 changes_made = parsed_result.get("changes_made", [])
                 match_score = parsed_result.get("match_score", 50)
                 priority_improvements = parsed_result.get("priority_improvements", [])
-                
-            except json.JSONDecodeError:
-                logger.warning("LLaMA response not valid JSON, using raw content as tailored resume")
+                logger.info(f"Successfully parsed: {len(missing_skills)} missing skills, {len(changes_made)} changes, score: {match_score}")
+            else:
+                # Fallback if no JSON could be parsed
+                logger.warning("Using fallback values - LLM response not valid JSON")
                 tailored_resume = content
                 missing_skills = []
                 keyword_suggestions = []
@@ -408,17 +486,22 @@ def _create_tailoring_prompt(resume_text: str, job_description: str, tailoring_l
 3. Generate a tailored resume that addresses these gaps
 4. Provide specific changes made and priority improvements
 
-Return ONLY a JSON object with this exact structure:
+**IMPORTANT**: Return ONLY valid JSON. Do NOT wrap in markdown code blocks. Do NOT add any text before or after the JSON.
+All newlines in the "tailored_resume" field MUST be escaped as \\n (not literal newlines).
+
+Return this exact JSON structure (with escaped newlines):
 {{
-  "tailored_resume": "the complete tailored resume text here",
+  "tailored_resume": "Name\\nContact Info\\n\\nEDUCATION\\n...",
   "match_score": 85,
-  "missing_skills": ["skill1", "skill2", "skill3"],
+  "missing_skills": ["Cloud Architecture", "Agile Methodology", "Full Stack Development"],
   "keyword_suggestions": ["Add 'cloud architecture' to technical skills", "Mention 'Agile methodology' in project descriptions"],
   "changes_made": ["Added FastAPI to skills section", "Emphasized Docker experience in bullet points", "Reordered projects to highlight backend work"],
-  "priority_improvements": ["Top 3 most important changes to make for this specific role"]
+  "priority_improvements": ["1. Emphasize experience with cloud platforms like AWS and Docker in the skills section. (~20% improvement)", "2. Highlight backend development experience through projects like Complete SDLC Project. (~18% improvement)", "3. Mention Agile methodology in project descriptions to show adaptability and teamwork. (~15% improvement)"]
 }}
 
-Be specific, actionable, and honest. Focus on highlighting genuine experience while optimizing presentation."""
+Be specific, actionable, and honest. Focus on highlighting genuine experience while optimizing presentation.
+
+CRITICAL: Your entire response must be ONLY the JSON object above with properly escaped newlines (\\n). No markdown, no explanations, just pure JSON."""
     
     return prompt
 
