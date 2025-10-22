@@ -7,11 +7,13 @@ import streamlit as st
 import requests
 from datetime import datetime
 import json
+import os
 
 # ============================================
 # CONFIGURATION
 # ============================================
-API_URL = "http://localhost:8001/v2"  # Updated to V2 API
+# Backend API base URL: configurable via env or Streamlit secrets for deployment
+API_URL = st.secrets.get("API_BASE_URL", os.getenv("API_BASE_URL", "http://localhost:8001/v2"))
 
 # Professional Brand Colors - Enhanced palette
 BRAND_COLORS = {
