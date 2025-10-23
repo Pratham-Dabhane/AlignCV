@@ -90,7 +90,7 @@ pydantic-settings==2.6.1
 transformers==4.47.1
 
 # Additional Testing
-httpx==0.28.1
+httpx==0.27.2
 faker==33.1.0
 
 # ============================================
