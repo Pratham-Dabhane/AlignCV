@@ -3,16 +3,16 @@
 # ============================================
 
 # Backend Dependencies
-fastapi==0.104.1
-uvicorn==0.24.0
-pydantic==2.5.0
-python-multipart==0.0.6
+fastapi==0.115.5
+uvicorn==0.32.1
+pydantic==2.10.3
+python-multipart==0.0.18
 
 # CORS for frontend integration
 fastapi-cors==0.0.6
 
 # Frontend (Streamlit)
-streamlit==1.28.1
+streamlit==1.40.2
 
 # Semantic matching (Phase 2)
 sentence-transformers>=2.7.0
@@ -25,27 +25,27 @@ PyPDF2==3.0.1
 python-docx==1.1.0
 
 # Development & Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-requests==2.31.0
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+requests==2.32.3
 
 # ============================================
 # V2 DEPENDENCIES (AlignCV Pro)
 # ============================================
 
 # Database & ORM
-sqlalchemy==2.0.23
-alembic==1.12.1
-psycopg2-binary==2.9.9
-asyncpg==0.29.0
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.1.1
-google-auth==2.25.2
-google-auth-oauthlib==1.2.0
+bcrypt==4.2.1
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
 google-auth-httplib2==0.2.0
 
 # Advanced Document Parsing
@@ -56,15 +56,15 @@ spacy==3.8.2
 # File Storage
 boto3==1.35.69
 supabase==2.11.0
-postgrest==0.18.1
+postgrest==0.19.3
 
 # Database (PostgreSQL for Supabase)
-psycopg2-binary==2.9.9
-asyncpg==0.29.0
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
 
 # Task Queue & Caching
-redis==5.0.1
-celery==5.3.4
+redis==5.2.1
+celery==5.4.0
 
 # Email
 sendgrid==6.11.0
@@ -79,33 +79,33 @@ qdrant-client==1.12.1
 sentence-transformers==2.7.0
 
 # Job Scraping
-beautifulsoup4==4.12.2
+beautifulsoup4==4.12.3
 feedparser==6.0.11
 
 # Environment & Config
-python-dotenv==1.0.0
-pydantic-settings==2.1.0
+python-dotenv==1.0.1
+pydantic-settings==2.6.1
 
 # Enhanced NLP
-transformers==4.36.0
+transformers==4.47.1
 
 # Additional Testing
-httpx==0.25.2
-faker==21.0.0
+httpx==0.28.1
+faker==33.1.0
 
 # ============================================
 # PHASE 8: MONITORING & DEPLOYMENT
 # ============================================
 
 # Error Tracking & Monitoring
-sentry-sdk[fastapi]==1.39.2
+sentry-sdk[fastapi]==2.19.2
 
 # Testing & Coverage
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-pytest-mock==3.12.0
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-mock==3.14.0
 
 # Docker
-gunicorn==21.2.0
+gunicorn==23.0.0
 
