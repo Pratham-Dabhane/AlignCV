@@ -5,6 +5,7 @@ API endpoints for resume rewriting with Mistral AI.
 
 import logging
 import difflib
+import os
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,7 +23,8 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configure logging for week3_4
+# Configure logging for week3_4 - create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
 week3_log_handler = logging.FileHandler("logs/week3_4.log")
 week3_log_handler.setFormatter(logging.Formatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
