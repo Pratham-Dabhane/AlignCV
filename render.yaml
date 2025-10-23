@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: aligncv-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn backend.v2.app_v2:app_v2 --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /v2/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION_NAME
+        value: resumes
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: False
+      - key: CORS_ORIGINS
+        value: '["https://aligncv.streamlit.app"]'
