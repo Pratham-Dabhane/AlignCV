@@ -13,25 +13,51 @@ V2 routes use /v2 prefix for consistency.
 
 import asyncio
 import sys
+import traceback
 
 # Fix for Windows + psycopg async compatibility
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer
-from contextlib import asynccontextmanager
+print("🚀 Starting AlignCV V2 application...", file=sys.stderr)
 
-from .config import settings
-from .database import init_db
-from .logging_config import setup_logging, get_logger
-from .middleware import RequestLoggingMiddleware
-from .auth.routes import router as auth_router
-from .documents.routes import router as documents_router
-from .ai.routes import router as ai_router
-from .jobs.routes import router as jobs_router
-from .notifications.routes import router as notifications_router
+try:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.security import HTTPBearer
+    from contextlib import asynccontextmanager
+
+    print("✅ FastAPI imports successful", file=sys.stderr)
+
+    from .config import settings
+    print(f"✅ Config loaded - Environment: {settings.environment}", file=sys.stderr)
+    
+    from .database import init_db
+    print("✅ Database module imported", file=sys.stderr)
+    
+    from .logging_config import setup_logging, get_logger
+    from .middleware import RequestLoggingMiddleware
+    print("✅ Logging and middleware imported", file=sys.stderr)
+    
+    from .auth.routes import router as auth_router
+    print("✅ Auth routes imported", file=sys.stderr)
+    
+    from .documents.routes import router as documents_router
+    print("✅ Documents routes imported", file=sys.stderr)
+    
+    from .ai.routes import router as ai_router
+    print("✅ AI routes imported", file=sys.stderr)
+    
+    from .jobs.routes import router as jobs_router
+    print("✅ Jobs routes imported", file=sys.stderr)
+    
+    from .notifications.routes import router as notifications_router
+    print("✅ Notifications routes imported", file=sys.stderr)
+    
+except Exception as e:
+    print(f"❌ STARTUP ERROR during imports: {e}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    raise
 
 # Security scheme for OpenAPI docs
 security = HTTPBearer()
