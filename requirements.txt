@@ -16,8 +16,8 @@ streamlit==1.28.1
 
 # Semantic matching (Phase 2)
 sentence-transformers>=2.7.0
-scikit-learn==1.3.2
-numpy==1.26.0
+scikit-learn==1.5.2
+numpy>=1.26.0,<2.0.0
 torch>=2.1.0
 
 # Document parsing (Phase 2)
