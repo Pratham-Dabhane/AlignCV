@@ -1,0 +1,1 @@
+web: streamlit run frontend/app_v2.py --server.port=$PORT --server.address=0.0.0.0 --server.fileWatcherType=none --server.enableCORS=false --server.enableXsrfProtection=false --browser.gatherUsageStats=false --logger.level=error

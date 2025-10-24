@@ -1,7 +1,6 @@
 """
 AlignCV V2 - Optimized Frontend Application
-Main entry point with authentication and routing
-Optimized for production deployment with disabled file watching
+Main entry point with reduced file watching and improved performance
 """
 
 import streamlit as st
@@ -13,16 +12,14 @@ import sys
 from pathlib import Path
 
 # ============================================
-# STREAMLIT CLOUD OPTIMIZATION
+# OPTIMIZATION SETTINGS
 # ============================================
-# Disable file watching to prevent inotify errors on Streamlit Cloud
+# Disable file watching to prevent inotify errors
 os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
 os.environ['STREAMLIT_SERVER_ENABLE_CORS'] = 'false'
 os.environ['STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION'] = 'false'
 os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
 os.environ['STREAMLIT_LOGGER_LEVEL'] = 'error'
-os.environ['STREAMLIT_SERVER_HEADLESS'] = 'true'
-os.environ['STREAMLIT_SERVER_RUN_ON_SAVE'] = 'false'
 
 # ============================================
 # CONFIGURATION
@@ -54,7 +51,7 @@ BRAND_COLORS = {
     "text_light": "#9CA3AF"
 }
 
-# Page configuration
+# Page configuration with optimization
 st.set_page_config(
     page_title="AlignCV - Your Career, Aligned",
     page_icon="🎯",
@@ -109,7 +106,7 @@ if "navigate_to" not in st.session_state:
     st.session_state.navigate_to = None
 
 # ============================================
-# PROFESSIONAL CUSTOM CSS
+# PROFESSIONAL CUSTOM CSS (OPTIMIZED)
 # ============================================
 st.markdown(f"""
     <style>

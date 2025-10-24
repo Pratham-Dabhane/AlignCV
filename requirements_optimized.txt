@@ -1,0 +1,211 @@
+# ============================================
+# OPTIMIZED DEPENDENCIES FOR ALIGNCV V2
+# ============================================
+# This file contains optimized dependencies with specific versions
+# to prevent conflicts and ensure stability
+
+# ============================================
+# CORE FRAMEWORK DEPENDENCIES
+# ============================================
+
+# FastAPI and ASGI server
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic[email]==2.10.3
+python-multipart==0.0.18
+
+# CORS for frontend integration
+fastapi-cors==0.0.6
+
+# ============================================
+# FRONTEND DEPENDENCIES
+# ============================================
+
+# Streamlit with specific version for stability
+streamlit==1.40.2
+
+# HTTP client for API calls
+requests==2.32.3
+httpx==0.27.2
+
+# ============================================
+# DATABASE & ORM DEPENDENCIES
+# ============================================
+
+# SQLAlchemy and migrations
+sqlalchemy==2.0.36
+alembic==1.14.0
+
+# PostgreSQL drivers
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
+
+# Supabase integration
+supabase==2.11.0
+postgrest==0.19.3
+
+# ============================================
+# AUTHENTICATION & SECURITY
+# ============================================
+
+# JWT and password hashing
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+
+# Google OAuth
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+
+# ============================================
+# DOCUMENT PROCESSING
+# ============================================
+
+# PDF processing
+PyPDF2==3.0.1
+PyMuPDF==1.24.14
+
+# Word document processing
+python-docx==1.1.0
+
+# NLP processing
+spacy==3.8.2
+
+# ============================================
+# AI & MACHINE LEARNING
+# ============================================
+
+# Core ML libraries
+numpy>=1.26.0,<2.0.0
+scikit-learn==1.5.2
+torch>=2.1.0,<3.0.0
+
+# Transformers and embeddings
+transformers==4.47.1
+sentence-transformers==2.7.0
+
+# LLM providers
+openai==1.58.1
+mistralai==1.2.6
+groq==0.14.0
+
+# Vector database
+qdrant-client==1.12.1
+
+# ============================================
+# TASK QUEUE & CACHING
+# ============================================
+
+# Redis for caching and task queue
+redis==5.2.1
+celery==5.4.0
+
+# ============================================
+# FILE STORAGE & CLOUD
+# ============================================
+
+# AWS S3 integration
+boto3==1.35.69
+
+# ============================================
+# EMAIL SERVICES
+# ============================================
+
+# SendGrid for email
+sendgrid==6.11.0
+
+# ============================================
+# WEB SCRAPING & DATA COLLECTION
+# ============================================
+
+# Web scraping
+beautifulsoup4==4.12.3
+feedparser==6.0.11
+
+# ============================================
+# CONFIGURATION & ENVIRONMENT
+# ============================================
+
+# Environment management
+python-dotenv==1.0.1
+pydantic-settings==2.6.1
+
+# ============================================
+# MONITORING & LOGGING
+# ============================================
+
+# Error tracking
+sentry-sdk[fastapi]==2.19.2
+
+# ============================================
+# TESTING & DEVELOPMENT
+# ============================================
+
+# Testing framework
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+
+# Test data generation
+faker==33.1.0
+
+# ============================================
+# PRODUCTION DEPLOYMENT
+# ============================================
+
+# WSGI server
+gunicorn==23.0.0
+
+# ============================================
+# OPTIMIZATION & PERFORMANCE
+# ============================================
+
+# Memory optimization
+psutil==5.9.8
+
+# File watching optimization (alternative to watchdog)
+watchdog==6.0.0
+
+# ============================================
+# SECURITY & COMPLIANCE
+# ============================================
+
+# Security headers
+secure==0.3.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# ============================================
+# UTILITIES
+# ============================================
+
+# Date/time handling
+python-dateutil==2.9.0
+
+# JSON handling
+orjson==3.10.12
+
+# URL handling
+yarl==1.13.1
+
+# ============================================
+# OPTIONAL DEPENDENCIES
+# ============================================
+# These can be installed if needed for specific features
+
+# [dev] Development dependencies
+# black==24.10.0
+# flake8==7.1.1
+# mypy==1.13.0
+
+# [docs] Documentation
+# mkdocs==1.6.1
+# mkdocs-material==9.5.45
+
+# [monitoring] Advanced monitoring
+# prometheus-client==0.21.1
+# grafana-api==1.0.3

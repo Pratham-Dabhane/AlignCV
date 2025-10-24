@@ -1,0 +1,3 @@
+# Streamlit Cloud Requirements - Minimal dependencies
+streamlit==1.40.2
+requests==2.32.3
