@@ -62,18 +62,26 @@ except Exception as e:
 # Security scheme for OpenAPI docs
 security = HTTPBearer()
 
+print("🔄 Configuring logging...", file=sys.stderr)
+
 # Configure centralized logging
-setup_logging(
-    log_level=settings.log_level if hasattr(settings, 'log_level') else 'INFO',
-    log_file='logs/app.log',
-    enable_sentry=settings.sentry_dsn is not None if hasattr(settings, 'sentry_dsn') else False,
-    sentry_dsn=getattr(settings, 'sentry_dsn', None),
-    environment=settings.environment
-)
+try:
+    setup_logging(
+        log_level=settings.log_level if hasattr(settings, 'log_level') else 'INFO',
+        log_file='logs/app.log',
+        enable_sentry=settings.sentry_dsn is not None if hasattr(settings, 'sentry_dsn') else False,
+        sentry_dsn=getattr(settings, 'sentry_dsn', None),
+        environment=settings.environment
+    )
+    print("✅ Logging configured", file=sys.stderr)
+except Exception as e:
+    print(f"❌ Logging setup failed: {e}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    raise
 
 logger = get_logger(__name__)
 
-print("✅ Logger configured", file=sys.stderr)
+print("✅ Logger instance created", file=sys.stderr)
 
 
 @asynccontextmanager
