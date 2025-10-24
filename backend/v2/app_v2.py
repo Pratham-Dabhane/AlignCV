@@ -73,23 +73,29 @@ setup_logging(
 
 logger = get_logger(__name__)
 
+print("✅ Logger configured", file=sys.stderr)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Lifespan context manager for startup and shutdown events.
     """
+    print("🔄 Lifespan startup begin", file=sys.stderr)
     # Startup
     logger.info("=" * 60)
     logger.info("AlignCV V2 Starting...")
     logger.info("=" * 60)
     
     # Initialize database
+    print("🔄 Attempting database initialization...", file=sys.stderr)
     logger.info("Initializing database...")
     try:
         await init_db()
+        print("✅ Database initialized", file=sys.stderr)
         logger.info("Database initialized successfully")
     except Exception as e:
+        print(f"❌ Database init failed: {e}", file=sys.stderr)
         logger.error(f"Database initialization failed: {str(e)}")
         raise
     
@@ -98,11 +104,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"Storage backend: {settings.storage_backend}")
     logger.info("AlignCV V2 ready!")
     
+    print("✅ Lifespan startup complete", file=sys.stderr)
+    
     yield
     
     # Shutdown
     logger.info("AlignCV V2 shutting down...")
+    print("🔄 Lifespan shutdown", file=sys.stderr)
 
+
+print("🔄 Creating FastAPI app...", file=sys.stderr)
 
 # Create V2 app
 app_v2 = FastAPI(
@@ -130,12 +141,17 @@ app_v2.add_middleware(
 # Add request logging middleware
 app_v2.add_middleware(RequestLoggingMiddleware)
 
+print("✅ Middleware configured", file=sys.stderr)
+
 # Include routers
 app_v2.include_router(auth_router)
 app_v2.include_router(documents_router)
 app_v2.include_router(ai_router)
 app_v2.include_router(jobs_router)
 app_v2.include_router(notifications_router)
+
+print("✅ All routers included", file=sys.stderr)
+print("🎉 FastAPI app created successfully!", file=sys.stderr)
 
 @app_v2.get("/v2/")
 async def root():
