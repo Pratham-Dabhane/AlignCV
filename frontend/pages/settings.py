@@ -5,7 +5,7 @@ Settings Page - User preferences and configuration
 import streamlit as st
 import requests
 
-API_URL = "http://localhost:8001/v2"
+API_URL = "https://aligncv-e55h.onrender.com/v2"
 
 def get_headers():
     """Get auth headers"""

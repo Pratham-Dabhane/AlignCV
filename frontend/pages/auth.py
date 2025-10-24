@@ -6,7 +6,7 @@ import streamlit as st
 import requests
 from typing import Dict, Optional
 
-API_URL = "http://localhost:8001/v2"
+API_URL = "https://aligncv-e55h.onrender.com/v2"
 
 def show_auth_page():
     """Show login/signup page"""

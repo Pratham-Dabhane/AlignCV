@@ -6,7 +6,7 @@ import streamlit as st
 import requests
 from datetime import datetime
 
-API_URL = "http://localhost:8001/v2"
+API_URL = "https://aligncv-e55h.onrender.com/v2"
 
 def get_headers():
     """Get auth headers for API requests"""
