@@ -3,34 +3,40 @@ Vector Embedding Utilities - Phase 6.1
 
 Handles text-to-vector embeddings using BGE-base-en-v1.5 (768-dim).
 Upgraded from all-MiniLM-L6-v2 (384-dim) for better semantic search quality.
+
+Note: Model loading is lazy to avoid blocking app startup.
 """
 
 import logging
 from typing import List, Optional
-from sentence_transformers import SentenceTransformer
 
 from ..config import Settings
 
 logger = logging.getLogger(__name__)
 
-# Global model cache
-_sentence_transformer_model: Optional[SentenceTransformer] = None
+# Global model cache - lazy loaded on first use
+_sentence_transformer_model = None
 
 
-def get_sentence_transformer_model() -> SentenceTransformer:
+def get_sentence_transformer_model():
     """
-    Load and cache sentence-transformers model.
+    Load and cache sentence-transformers model (lazy loading).
     
     Uses 'BAAI/bge-base-en-v1.5' for high-quality semantic search.
     Model size: ~440MB, Embedding dimension: 768
     Best for: Information retrieval, semantic similarity
+    
+    Note: First call will download/load model (~30-60s on slow connections).
+    Subsequent calls return cached instance.
     """
     global _sentence_transformer_model
     
     if _sentence_transformer_model is None:
-        logger.info("Loading sentence-transformers model: BAAI/bge-base-en-v1.5")
+        logger.info("⏳ Loading sentence-transformers model: BAAI/bge-base-en-v1.5 (this may take 30-60s on first run)")
+        # Import here to avoid blocking app startup
+        from sentence_transformers import SentenceTransformer
         _sentence_transformer_model = SentenceTransformer('BAAI/bge-base-en-v1.5')
-        logger.info("BGE-base-en-v1.5 model loaded successfully (768-dim)")
+        logger.info("✅ BGE-base-en-v1.5 model loaded successfully (768-dim)")
     
     return _sentence_transformer_model
 
