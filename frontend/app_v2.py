@@ -44,9 +44,40 @@ st.set_page_config(
     page_title="AlignCV - Your Career, Aligned",
     page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="expanded",
-    theme="light"  # Force light mode
+    initial_sidebar_state="expanded"
 )
+
+# Force light mode with CSS (compatible with all Streamlit versions)
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+    }
+    .stSidebar {
+        background-color: #F9FAFB !important;
+    }
+    .stSelectbox > div > div {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+    }
+    .stTextInput > div > div > input {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+    }
+    .stTextArea > div > div > textarea {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+    }
+    .stButton > button {
+        background-color: #2563EB !important;
+        color: #FFFFFF !important;
+    }
+    .stButton > button:hover {
+        background-color: #1E40AF !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================
 # SESSION STATE INITIALIZATION
