@@ -13,7 +13,7 @@ import os
 # CONFIGURATION
 # ============================================
 # Backend API base URL: configurable via env or Streamlit secrets for deployment
-API_URL = st.secrets.get("API_BASE_URL", os.getenv("API_BASE_URL", "http://localhost:8001/v2"))
+API_URL = st.secrets.get("API_BASE_URL", os.getenv("API_BASE_URL", "https://aligncv-e55h.onrender.com/v2"))
 
 # Professional Brand Colors - Enhanced palette
 BRAND_COLORS = {
