@@ -44,7 +44,8 @@ st.set_page_config(
     page_title="AlignCV - Your Career, Aligned",
     page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    theme="light"  # Force light mode
 )
 
 # ============================================
