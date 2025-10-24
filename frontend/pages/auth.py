@@ -4,6 +4,7 @@ Authentication Page - Login & Signup
 
 import streamlit as st
 import requests
+import json
 from typing import Dict, Optional
 
 API_URL = "https://aligncv-e55h.onrender.com/v2"
@@ -45,19 +46,25 @@ def show_login():
                 )
                 
                 if response.status_code == 200:
-                    data = response.json()
-                    
-                    # Store tokens and user info
-                    st.session_state.authenticated = True
-                    st.session_state.access_token = data["tokens"]["access_token"]
-                    st.session_state.refresh_token = data["tokens"]["refresh_token"]
-                    st.session_state.user = data["user"]
-                    
-                    st.success(f"✅ Welcome back, {data['user']['name']}!")
-                    st.rerun()
+                    try:
+                        data = response.json()
+                        
+                        # Store tokens and user info
+                        st.session_state.authenticated = True
+                        st.session_state.access_token = data["tokens"]["access_token"]
+                        st.session_state.refresh_token = data["tokens"]["refresh_token"]
+                        st.session_state.user = data["user"]
+                        
+                        st.success(f"✅ Welcome back, {data['user']['name']}!")
+                        st.rerun()
+                    except (json.JSONDecodeError, KeyError) as e:
+                        st.error(f"❌ Invalid response from server: {str(e)}")
                 else:
-                    error_msg = response.json().get("detail", "Login failed")
-                    st.error(f"❌ {error_msg}")
+                    try:
+                        error_msg = response.json().get("detail", "Login failed")
+                        st.error(f"❌ {error_msg}")
+                    except json.JSONDecodeError:
+                        st.error(f"❌ Login failed (Status: {response.status_code})")
                     
             except requests.exceptions.ConnectionError:
                 st.error("❌ Cannot connect to server. Is it running on port 8001?")
@@ -107,19 +114,25 @@ def show_signup():
                 )
                 
                 if response.status_code == 201:
-                    data = response.json()
-                    
-                    # Store tokens and user info
-                    st.session_state.authenticated = True
-                    st.session_state.access_token = data["tokens"]["access_token"]
-                    st.session_state.refresh_token = data["tokens"]["refresh_token"]
-                    st.session_state.user = data["user"]
-                    
-                    st.success(f"✅ Account created! Welcome, {data['user']['name']}!")
-                    st.rerun()
+                    try:
+                        data = response.json()
+                        
+                        # Store tokens and user info
+                        st.session_state.authenticated = True
+                        st.session_state.access_token = data["tokens"]["access_token"]
+                        st.session_state.refresh_token = data["tokens"]["refresh_token"]
+                        st.session_state.user = data["user"]
+                        
+                        st.success(f"✅ Account created! Welcome, {data['user']['name']}!")
+                        st.rerun()
+                    except (json.JSONDecodeError, KeyError) as e:
+                        st.error(f"❌ Invalid response from server: {str(e)}")
                 else:
-                    error_msg = response.json().get("detail", "Signup failed")
-                    st.error(f"❌ {error_msg}")
+                    try:
+                        error_msg = response.json().get("detail", "Signup failed")
+                        st.error(f"❌ {error_msg}")
+                    except json.JSONDecodeError:
+                        st.error(f"❌ Signup failed (Status: {response.status_code})")
                     
             except requests.exceptions.ConnectionError:
                 st.error("❌ Cannot connect to server. Is it running on port 8001?")
