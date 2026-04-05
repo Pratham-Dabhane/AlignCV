@@ -6,6 +6,8 @@ import streamlit as st
 import requests
 from datetime import datetime
 
+from utils.api_helpers import safe_json_parse, get_error_message
+
 API_URL = "https://aligncv-e55h.onrender.com/v2"
 
 def get_headers():
@@ -45,44 +47,60 @@ def show_upload_section():
         help="Supported formats: PDF, DOCX • Maximum size: 5MB",
         label_visibility="collapsed"
     )
-    
+
     if uploaded_file:
         # Show file details
         col1, col2 = st.columns(2)
         with col1:
-            st.info(f"� **File**: {uploaded_file.name}")
+            st.info(f"📄 **File**: {uploaded_file.name}")
         with col2:
             file_size = uploaded_file.size / 1024  # Convert to KB
             st.info(f"📊 **Size**: {file_size:.2f} KB")
-        
-        if st.button("🚀 Upload Resume", type="primary", use_container_width=True):
+
+        # Keep upload action deterministic across reruns
+        with st.form("upload_resume_form", clear_on_submit=False):
+            submit_upload = st.form_submit_button(
+                "🚀 Upload Resume",
+                type="primary",
+                use_container_width=True
+            )
+
+        if submit_upload:
+            if not st.session_state.get("access_token"):
+                st.error("❌ Session expired. Please log in again.")
+                return
+
             with st.spinner("Uploading and processing your resume..."):
                 try:
                     # Prepare file for upload
                     files = {
-                        'file': (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)
+                        'file': (
+                            uploaded_file.name,
+                            uploaded_file.getvalue(),
+                            uploaded_file.type or "application/octet-stream"
+                        )
                     }
-                    
+
                     # Upload to API
                     response = requests.post(
                         f"{API_URL}/documents/upload",
                         files=files,
                         headers=get_headers(),
-                        timeout=30
+                        timeout=45
                     )
-                    
+
                     if response.status_code in [200, 201]:
-                        data = response.json()
-                        st.success(f"✅ Resume uploaded successfully!")
+                        data = safe_json_parse(response) or {}
+                        st.success("✅ Resume uploaded successfully!")
                         st.balloons()
-                        
+
                         # Show extracted info
                         with st.expander("📊 Extracted Information", expanded=True):
-                            st.markdown(f"**Document ID**: {data.get('document_id')}")
-                            st.markdown(f"**Filename**: {data.get('file_name')}")
-                            st.markdown(f"**Size**: {data.get('file_size', 0) / 1024:.2f} KB")
-                            
-                            if 'parsed_text' in data:
+                            st.markdown(f"**Document ID**: {data.get('document_id', 'N/A')}")
+                            st.markdown(f"**Filename**: {data.get('file_name', uploaded_file.name)}")
+                            st.markdown(f"**Size**: {data.get('file_size', uploaded_file.size) / 1024:.2f} KB")
+
+                            if data.get('parsed_text'):
                                 st.markdown("**Extracted Text Preview**:")
                                 st.text_area(
                                     "Preview",
@@ -90,23 +108,20 @@ def show_upload_section():
                                     height=200,
                                     disabled=True
                                 )
-                            
-                            if 'skills' in data and data['skills']:
+
+                            if data.get('skills'):
                                 st.markdown("**Skills Detected**:")
                                 st.write(", ".join(data['skills'][:10]))
-                            
-                            if 'roles' in data and data['roles']:
+
+                            if data.get('roles'):
                                 st.markdown("**Roles Detected**:")
                                 st.write(", ".join(data['roles'][:5]))
-                        
+
                         st.info("💡 Go to 'AI Rewrite' tab to optimize your resume!")
                     else:
-                        try:
-                            error_msg = response.json().get('detail', 'Upload failed')
-                        except Exception:
-                            error_msg = f"Upload failed (status {response.status_code})"
+                        error_msg = get_error_message(response, "Upload failed")
                         st.error(f"❌ {error_msg}")
-                        
+
                 except requests.exceptions.ConnectionError:
                     st.error("❌ Cannot connect to server. Is the backend running?")
                 except Exception as e:
