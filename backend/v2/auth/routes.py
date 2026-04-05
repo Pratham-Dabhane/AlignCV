@@ -32,6 +32,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v2/auth", tags=["Authentication"])
 
 
+def _normalize_user_for_response(user: dict) -> dict:
+    """Normalize user payload across schema variants."""
+    normalized = dict(user)
+    if "name" not in normalized:
+        normalized["name"] = normalized.get("full_name") or "User"
+    return normalized
+
+
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def signup(
     request: SignupRequest,
@@ -64,16 +72,25 @@ def signup(
     
     # Hash password
     password_hash = hash_password(request.password)
-    
-    # Create new user
-    user_data = {
-        'name': request.name,
-        'email': request.email,
-        'password_hash': password_hash
-    }
-    
-    result = db.table('users').insert(user_data).execute()
-    new_user = result.data[0]
+
+    # Create new user. Prefer newer schema columns first, then fallback.
+    try:
+        user_data = {
+            'full_name': request.name,
+            'email': request.email,
+            'hashed_password': password_hash
+        }
+        result = db.table('users').insert(user_data).execute()
+        new_user = result.data[0]
+    except Exception:
+        # Backward compatibility for old schema
+        user_data = {
+            'name': request.name,
+            'email': request.email,
+            'password_hash': password_hash
+        }
+        result = db.table('users').insert(user_data).execute()
+        new_user = result.data[0]
     
     logger.info(f"User created successfully: {new_user['id']} - {new_user['email']}")
     
@@ -81,8 +98,10 @@ def signup(
     access_token = create_access_token(data={"sub": new_user['email']})
     refresh_token = create_refresh_token(data={"sub": new_user['email']})
     
+    response_user = _normalize_user_for_response(new_user)
+
     return AuthResponse(
-        user=UserResponse(**new_user),
+        user=UserResponse(**response_user),
         tokens=TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
@@ -117,15 +136,24 @@ def login(
     result = db.table('users').select('*').eq('email', request.email).execute()
     user = result.data[0] if result.data else None
     
-    if not user or not user.get('password_hash'):
+    if not user:
         logger.warning(f"Login failed: User not found - {request.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    # Support both schema variants
+    stored_hash = user.get('hashed_password') or user.get('password_hash')
+    if not stored_hash:
+        logger.warning(f"Login failed: Missing password hash for user - {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
     
     # Verify password
-    if not verify_password(request.password, user['password_hash']):
+    if not verify_password(request.password, stored_hash):
         logger.warning(f"Login failed: Invalid password - {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -138,8 +166,10 @@ def login(
     access_token = create_access_token(data={"sub": user['email']})
     refresh_token = create_refresh_token(data={"sub": user['email']})
     
+    response_user = _normalize_user_for_response(user)
+
     return AuthResponse(
-        user=UserResponse(**user),
+        user=UserResponse(**response_user),
         tokens=TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
