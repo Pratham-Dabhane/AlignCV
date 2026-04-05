@@ -181,7 +181,26 @@ async def upload_document(
             }
             result = db.table('documents').insert(minimal_document_data).execute()
 
-        document = result.data[0]
+        document = result.data[0] if result.data else None
+        if not document:
+            # Some PostgREST/Supabase settings can return empty insert payloads.
+            # Fetch the latest row by user and storage path as a fallback.
+            fetch_result = (
+                db.table('documents')
+                .select('*')
+                .eq('user_id', current_user['id'])
+                .eq('storage_path', storage_path)
+                .order('created_at', desc=True)
+                .limit(1)
+                .execute()
+            )
+            document = fetch_result.data[0] if fetch_result.data else None
+
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Document metadata insert did not return a record"
+            )
         
         logger.info(f"✅ Document saved: {document['id']} for user {current_user['id']}")
         
@@ -197,6 +216,15 @@ async def upload_document(
             "roles": nlp_data.get("roles", []),
             "entities": nlp_data.get("entities", {})
         }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Document upload failed for user {current_user['id']}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload failed: {str(e)}"
+        )
         
     finally:
         # Clean up temp file
