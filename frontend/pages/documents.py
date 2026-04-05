@@ -101,7 +101,10 @@ def show_upload_section():
                         
                         st.info("💡 Go to 'AI Rewrite' tab to optimize your resume!")
                     else:
-                        error_msg = response.json().get('detail', 'Upload failed')
+                        try:
+                            error_msg = response.json().get('detail', 'Upload failed')
+                        except Exception:
+                            error_msg = f"Upload failed (status {response.status_code})"
                         st.error(f"❌ {error_msg}")
                         
                 except requests.exceptions.ConnectionError:

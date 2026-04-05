@@ -138,13 +138,16 @@ async def upload_document(
         storage = get_storage()
         storage_path = storage.save_file(temp_path, current_user['id'], file.filename)
         
-        # Save to database
-        document_data = {
+        # Save to database. Try the richer payload first; if migrated schema is stricter,
+        # fall back to the minimal/common columns.
+        rich_document_data = {
             'user_id': current_user['id'],
             'file_name': file.filename,
             'file_type': file_ext.replace('.', ''),
             'file_size': file_size,
             'file_path': storage_path,
+            'storage_path': storage_path,
+            'mime_type': file.content_type or 'application/octet-stream',
             'status': 'uploaded',
             'parsed_content': {
                 'text': extracted_text,
@@ -154,8 +157,30 @@ async def upload_document(
                 'entities': nlp_data.get('entities', {})
             }
         }
-        
-        result = db.table('documents').insert(document_data).execute()
+
+        try:
+            result = db.table('documents').insert(rich_document_data).execute()
+        except Exception as insert_error:
+            logger.warning(
+                f"Primary document insert failed, retrying with minimal schema: {insert_error}"
+            )
+            minimal_document_data = {
+                'user_id': current_user['id'],
+                'file_name': file.filename,
+                'file_size': file_size,
+                'file_path': storage_path,
+                'storage_path': storage_path,
+                'mime_type': file.content_type or 'application/octet-stream',
+                'parsed_content': {
+                    'text': extracted_text,
+                    'text_hash': text_hash,
+                    'skills': nlp_data.get('skills', []),
+                    'roles': nlp_data.get('roles', []),
+                    'entities': nlp_data.get('entities', {})
+                }
+            }
+            result = db.table('documents').insert(minimal_document_data).execute()
+
         document = result.data[0]
         
         logger.info(f"✅ Document saved: {document['id']} for user {current_user['id']}")
