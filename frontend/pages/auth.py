@@ -5,9 +5,25 @@ Authentication Page - Login & Signup
 import streamlit as st
 import requests
 import json
+import time
 from typing import Dict, Optional
 
 API_URL = "https://aligncv-e55h.onrender.com/v2"
+
+
+def _post_with_retry(url: str, payload: dict, timeout_seconds: int = 30, retries: int = 2):
+    """POST helper with retry for transient Render cold-start timeouts."""
+    last_error = None
+    for attempt in range(retries):
+        try:
+            return requests.post(url, json=payload, timeout=timeout_seconds)
+        except requests.exceptions.ReadTimeout as e:
+            last_error = e
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+            raise
+    raise last_error
 
 def show_auth_page():
     """Show login/signup page"""
@@ -39,10 +55,11 @@ def show_login():
             
             # Call login API
             try:
-                response = requests.post(
+                response = _post_with_retry(
                     f"{API_URL}/auth/login",
-                    json={"email": email, "password": password},
-                    timeout=10
+                    {"email": email, "password": password},
+                    timeout_seconds=30,
+                    retries=2,
                 )
                 
                 if response.status_code == 200:
@@ -67,7 +84,9 @@ def show_login():
                         st.error(f"❌ Login failed (Status: {response.status_code})")
                     
             except requests.exceptions.ConnectionError:
-                st.error("❌ Cannot connect to server. Is it running on port 8001?")
+                st.error("❌ Cannot connect to backend API. Please try again in a few seconds.")
+            except requests.exceptions.ReadTimeout:
+                st.error("❌ Login timed out. The backend may be waking up; please try again.")
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
 
@@ -103,14 +122,15 @@ def show_signup():
             
             # Call signup API
             try:
-                response = requests.post(
+                response = _post_with_retry(
                     f"{API_URL}/auth/signup",
-                    json={
+                    {
                         "name": name,
                         "email": email,
-                        "password": password
+                        "password": password,
                     },
-                    timeout=10
+                    timeout_seconds=30,
+                    retries=2,
                 )
                 
                 if response.status_code == 201:
@@ -135,6 +155,8 @@ def show_signup():
                         st.error(f"❌ Signup failed (Status: {response.status_code})")
                     
             except requests.exceptions.ConnectionError:
-                st.error("❌ Cannot connect to server. Is it running on port 8001?")
+                st.error("❌ Cannot connect to backend API. Please try again in a few seconds.")
+            except requests.exceptions.ReadTimeout:
+                st.error("❌ Signup timed out. The backend may be waking up; please try again.")
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
